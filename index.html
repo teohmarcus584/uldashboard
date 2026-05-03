@@ -12,7 +12,6 @@
         .dashboard-container { width: 100%; padding: 0 20px; }
         @media (min-width: 1400px) { .dashboard-container { padding: 0 40px; } }
         
-        /* HEADER: perfect center alignment for date controls using GRID */
         .app-header {
             background: white; padding: 12px 20px; border-bottom: 1px solid #eef2f8;
             display: grid;
@@ -39,7 +38,6 @@
         .store-selector:hover { background: #e4e9f2; }
         .store-name { font-weight: 600; font-size: 0.9rem; color: #1e4668; max-width: 160px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         
-        /* DATE CONTROL — centered & aligned */
         .date-control {
             display: flex;
             align-items: center;
@@ -88,7 +86,6 @@
         .refresh-spin { animation: spin 0.6s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         
-        /* Modal styles */
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); backdrop-filter: blur(3px); z-index: 1000; display: flex; align-items: flex-end; justify-content: center; visibility: hidden; opacity: 0; transition: 0.2s; }
         .modal-overlay.active { visibility: visible; opacity: 1; }
         .modal-bottom { background: white; width: 100%; max-width: 520px; border-radius: 32px 32px 0 0; padding: 24px 20px 32px; transform: translateY(100%); transition: transform 0.25s ease-out; }
@@ -102,7 +99,6 @@
         .divider { height: 1px; background: #eef2f8; margin: 20px 0; }
         .product-table-container { max-height: 420px; overflow-y: auto; border-radius: 24px; }
         @media (max-width: 640px) { .kpi-value { font-size: 1.8rem; } .date-trigger-btn { padding: 8px 16px; font-size: 0.85rem; } .store-name { max-width: 110px; } }
-        .date-label-today { font-weight: 700; color: #2b6e9e; }
         .employee-select { width: 100%; padding: 14px; border-radius: 40px; border: 1px solid #dce3ec; margin: 12px 0 8px; font-size: 1rem; background: white; }
         .generate-btn { background: #2b6e9e; color: white; border: none; border-radius: 60px; padding: 14px; width: 100%; font-weight: 700; font-size: 1rem; margin-top: 16px; cursor: pointer; }
         .generate-btn:hover { background: #1e5a85; }
@@ -186,7 +182,6 @@
             const closeReportModalBtn = document.getElementById('closeReportDownloadModal');
             const generateReportBtn = document.getElementById('generateReportBtn');
             const reportEmployeeSelect = document.getElementById('reportEmployeeSelect');
-            const reportCustomRangeDiv = document.getElementById('reportCustomRange');
             
             if (!refreshBtn || !leftArrowBtn || !rightArrowBtn || !dateTriggerBtn || !storeSelectorBtn || !downloadReportBtn) {
                 console.error("Critical DOM elements missing");
@@ -195,7 +190,6 @@
             
             // ----- Config & State -----
             const BACKEND_URL = "https://script.google.com/macros/s/AKfycbxEpeOAl41EjAxVnyEab3tJKOJFw4H9kYb5VfhiuFrJgmDEeLX54ILXOp0zh0ER8uJOeA/exec";
-            // The original POS backend that supports getReceipts
             const RECEIPTS_BACKEND_URL = "https://script.google.com/macros/s/AKfycbynUwttCsy9qEtWNB_jZ2X6P5CPfL8B6ESnchm02SUi58A-G9-SYWzykfynC-L1HPVyVQ/exec";
             const CACHE_TTL = 60000;
             const PRELOAD_DELAY = 800;
@@ -214,7 +208,6 @@
             let preloadTimer = null;
             let initialPreloadDone = false;
             let currentChartType = "line";
-            let allEmployeesList = [];  // store { id, name }
             
             // Helper: get today's YYYY-MM-DD in local time
             function getTodayYMD() {
@@ -524,12 +517,6 @@
                     fetchApi('getDiscountedProductSalesReport', s, f, t, sig),
                     fetchApi('getEmployeeSalesData', s, f, t, sig)
                 ]);
-                // Store employees list for later use in report modal
-                if (employees && employees.labels && employees.data) {
-                    allEmployeesList = employees.labels.map((name, idx) => ({ id: idx, name: name }));
-                } else {
-                    allEmployeesList = [];
-                }
                 return { sales, chart, products, employees };
             }
             
@@ -570,7 +557,7 @@
                 if (!employees.labels || !employees.labels.length) { staffDiv.innerHTML = '<div>No staff sales data</div>'; }
                 else {
                     let h = '<table class="mini-table"><thead><tr><th>Staff</th><th>Sales (RM)</th></tr></thead><tbody>';
-                    for (let i = 0; i < employees.labels.length; i++) h += `<tr><td><strong>${escapeHtml(employees.labels[i])}</strong></td><td>${formatMYR(employees.data[i])}</td><tr>`;
+                    for (let i = 0; i < employees.labels.length; i++) h += `<tr><td><strong>${escapeHtml(employees.labels[i])}</strong></td><td>${formatMYR(employees.data[i])}</td></tr>`;
                     h += '</tbody></table>';
                     staffDiv.innerHTML = h;
                 }
@@ -582,7 +569,7 @@
                     products.products.forEach(p => { const c = p.category || 'Uncategorized'; rev.set(c, (rev.get(c) || 0) + p.total); qty.set(c, (qty.get(c) || 0) + (p.quantity || 0)); });
                     const sorted = Array.from(rev.entries()).sort((a,b) => b[1] - a[1]);
                     let h = '<table class="mini-table"><thead><tr><th>Category</th><th>Quantity Sold</th><th>Total Sales (RM)</th></tr></thead><tbody>';
-                    sorted.forEach(([c, amt]) => { h += `<tr><td><strong>${escapeHtml(c)}</strong></td><td>${formatNumber(qty.get(c))}</td><td>${formatMYR(amt)}</td></tr>`; });
+                    sorted.forEach(([c, amt]) => { h += `<tr><td><strong>${escapeHtml(c)}</strong></td><td>${formatNumber(qty.get(c))}</span></td><td>${formatMYR(amt)}</span></tr>`; });
                     h += '</tbody></table>';
                     catDiv.innerHTML = h;
                 }
@@ -632,32 +619,44 @@
             function showError(msg) { errorDiv.innerText = msg; errorDiv.style.display = 'block'; setTimeout(() => errorDiv.style.display = 'none', 4000); }
             function escapeHtml(s) { if (!s) return ''; return s.replace(/[&<>]/g, m => m === '&' ? '&amp;' : m === '<' ? '&lt;' : '&gt;'); }
             
-            // ---------- Download Report Modal Functions ----------
-            async function populateEmployeeDropdown() {
-                if (allEmployeesList.length === 0) {
-                    try {
-                        const data = await fetchApi('getEmployeeSalesData', currentStore, currentFrom, currentTo, null);
-                        if (data && data.labels) {
-                            allEmployeesList = data.labels.map((name, idx) => ({ id: idx, name: name }));
-                        }
-                    } catch(e) { console.warn(e); }
-                }
-                reportEmployeeSelect.innerHTML = '<option value="all">👥 All Employees</option>';
-                allEmployeesList.forEach(emp => {
-                    const opt = document.createElement('option');
-                    opt.value = emp.id;
-                    opt.textContent = emp.name;
-                    reportEmployeeSelect.appendChild(opt);
-                });
-            }
-            
+            // ---------- Download Report Modal Functions (fixed) ----------
             let currentReportPreset = null;
             let reportFrom = '', reportTo = '';
             
+            async function populateEmployeeDropdownFromReceipts(from, to) {
+                // Fetch receipts to get unique employee names
+                try {
+                    const url = `${RECEIPTS_BACKEND_URL}?action=getReceipts&store=${currentStore}&from=${from}&to=${to}&employeeId=all`;
+                    const response = await fetch(url);
+                    const result = await response.json();
+                    if (result.success && result.receipts && result.receipts.length > 0) {
+                        const employeesSet = new Set();
+                        result.receipts.forEach(rec => {
+                            const name = rec.sales_person_name || rec.employee_name;
+                            if (name) employeesSet.add(name.trim());
+                        });
+                        const employees = Array.from(employeesSet).sort();
+                        reportEmployeeSelect.innerHTML = '<option value="all">👥 All Employees</option>';
+                        employees.forEach(name => {
+                            const opt = document.createElement('option');
+                            opt.value = name;
+                            opt.textContent = name;
+                            reportEmployeeSelect.appendChild(opt);
+                        });
+                    } else {
+                        reportEmployeeSelect.innerHTML = '<option value="all">👥 All Employees</option>';
+                    }
+                } catch (err) {
+                    console.warn("Could not populate employee dropdown:", err);
+                    reportEmployeeSelect.innerHTML = '<option value="all">👥 All Employees</option>';
+                }
+            }
+            
             function openReportModal() {
-                populateEmployeeDropdown();
-                currentReportPreset = 'today';
+                // Default to today's range for dropdown preview
                 const todayStr = getTodayYMD();
+                populateEmployeeDropdownFromReceipts(todayStr, todayStr);
+                currentReportPreset = 'today';
                 reportFrom = todayStr;
                 reportTo = todayStr;
                 reportModal.classList.add('active');
@@ -698,13 +697,21 @@
                     document.getElementById('reportCustomRange').style.display = 'none';
                 } else if (preset === 'custom') {
                     document.getElementById('reportCustomRange').style.display = 'block';
+                    // Do not set reportFrom/reportTo yet; will be taken from inputs
                 }
                 document.querySelectorAll('[data-report-preset]').forEach(btn => btn.style.backgroundColor = '');
                 const selected = document.querySelector(`[data-report-preset="${preset}"]`);
                 if (selected) selected.style.backgroundColor = '#eef2ff';
+                
+                // Refresh employee dropdown based on the newly selected range (for presets)
+                if (preset !== 'custom' && reportFrom && reportTo) {
+                    populateEmployeeDropdownFromReceipts(reportFrom, reportTo);
+                }
             }
             
             async function generateCSVReport() {
+                // Determine final date range
+                let fromDate = reportFrom, toDate = reportTo;
                 if (currentReportPreset === 'custom') {
                     const fromInput = document.getElementById('reportFromDate').value;
                     const toInput = document.getElementById('reportToDate').value;
@@ -714,13 +721,13 @@
                     }
                     if (fromInput > toInput) { showError('Invalid date range'); return; }
                     if (isFutureDate(fromInput)) { showError('Start date cannot be in the future'); return; }
-                    reportFrom = fromInput;
-                    reportTo = toInput;
+                    fromDate = fromInput;
+                    toDate = toInput;
                 }
-                if (!reportFrom || !reportTo) { showError('Invalid date range'); return; }
+                if (!fromDate || !toDate) { showError('Invalid date range'); return; }
                 
-                const employeeId = reportEmployeeSelect.value;
-                const employeeName = employeeId === 'all' ? 'All Employees' : reportEmployeeSelect.options[reportEmployeeSelect.selectedIndex]?.text || 'Selected';
+                const employeeValue = reportEmployeeSelect.value;
+                const employeeNameFilter = employeeValue === 'all' ? null : employeeValue;
                 
                 showError('');
                 const loadingMsg = document.createElement('div');
@@ -731,16 +738,17 @@
                 document.body.appendChild(loadingMsg);
                 
                 try {
-                    // Use the correct backend that has getReceipts
-                    let url = `${RECEIPTS_BACKEND_URL}?action=getReceipts&store=${currentStore}&from=${reportFrom}&to=${reportTo}&employeeId=all`;
+                    const url = `${RECEIPTS_BACKEND_URL}?action=getReceipts&store=${currentStore}&from=${fromDate}&to=${toDate}&employeeId=all`;
                     const response = await fetch(url);
                     const result = await response.json();
                     if (!result.success || !result.receipts) throw new Error('Failed to fetch receipt data: ' + (result.error || 'No receipts'));
                     
                     let receipts = result.receipts;
-                    if (employeeId !== 'all') {
-                        const selectedEmpName = reportEmployeeSelect.options[reportEmployeeSelect.selectedIndex]?.text;
-                        receipts = receipts.filter(r => r.sales_person_name === selectedEmpName || r.employee_name === selectedEmpName);
+                    if (employeeNameFilter) {
+                        receipts = receipts.filter(rec => {
+                            const emp = (rec.sales_person_name || rec.employee_name || '').trim();
+                            return emp.toLowerCase() === employeeNameFilter.toLowerCase();
+                        });
                     }
                     
                     if (receipts.length === 0) {
@@ -751,7 +759,7 @@
                     
                     const dailyMap = new Map(); // key "employeeName|date"
                     for (const rec of receipts) {
-                        const emp = rec.sales_person_name || rec.employee_name || 'Unknown';
+                        const emp = (rec.sales_person_name || rec.employee_name || 'Unknown').trim();
                         const date = rec.timestamp ? rec.timestamp.split('T')[0] : 'Unknown';
                         const total = parseFloat(rec.total) || 0;
                         const key = `${emp}|${date}`;
@@ -772,7 +780,6 @@
                     for (const row of rows) {
                         csvRows.push(`"${row.employee}","${row.date}",${row.total.toFixed(2)}`);
                     }
-                    // Add total row at the end
                     csvRows.push(`"TOTAL","",${grandTotal.toFixed(2)}`);
                     
                     const csvContent = csvRows.join('\n');
@@ -780,7 +787,8 @@
                     const link = document.createElement('a');
                     const urlFile = URL.createObjectURL(blob);
                     link.href = urlFile;
-                    link.setAttribute('download', `sales_report_${currentStore}_${reportFrom}_to_${reportTo}_${employeeName.replace(/\s/g, '_')}.csv`);
+                    const employeeFilePart = employeeNameFilter ? employeeNameFilter.replace(/\s/g, '_') : 'All_Employees';
+                    link.setAttribute('download', `sales_report_${currentStore}_${fromDate}_to_${toDate}_${employeeFilePart}.csv`);
                     document.body.appendChild(link);
                     link.click();
                     document.body.removeChild(link);
