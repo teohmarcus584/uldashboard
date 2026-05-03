@@ -165,7 +165,7 @@
             <option value="all">👥 All Employees</option>
         </select>
         <button id="generateReportBtn" class="generate-btn">📎 Generate CSV Report</button>
-        <button class="close-modal" id="closeReportModal">Cancel</button>
+        <button class="close-modal" id="closeReportModalBtn">Cancel</button>
     </div>
 </div>
 
@@ -183,7 +183,7 @@
             const errorDiv = document.getElementById('errorMsg');
             const downloadReportBtn = document.getElementById('downloadReportBtn');
             const reportModal = document.getElementById('reportDownloadModal');
-            const closeReportModal = document.getElementById('closeReportModal');
+            const closeReportModalBtn = document.getElementById('closeReportModalBtn');
             const generateReportBtn = document.getElementById('generateReportBtn');
             const reportEmployeeSelect = document.getElementById('reportEmployeeSelect');
             const reportCustomRangeDiv = document.getElementById('reportCustomRange');
@@ -590,8 +590,8 @@
                 else {
                     const allProducts = [...products.products].sort((a,b) => (b.total || 0) - (a.total || 0));
                     let h = '<table class="mini-table"><thead><tr><th>Product</th><th>Qty Sold</th><th>Revenue (RM)</th></tr></thead><tbody>';
-                    allProducts.forEach(p => { h += `<tr><td><strong>${escapeHtml(p.name || '')}</strong><br><span class="badge">${p.category || ''}</span></td><td>${formatNumber(p.quantity)}</td><td>${formatMYR(p.total)}</td></tr>`; });
-                    h += '</tbody></tr>';
+                    allProducts.forEach(p => { h += `<tr><td><strong>${escapeHtml(p.name || '')}</strong><br><span class="badge">${p.category || ''}</span></td><td>${formatNumber(p.quantity)}</span></td><td>${formatMYR(p.total)}</span></tr>`; });
+                    h += '</tbody></table>';
                     prodDiv.innerHTML = h;
                 }
                 
@@ -632,7 +632,6 @@
             
             // ---------- Download Report Modal Functions ----------
             async function populateEmployeeDropdown() {
-                // Fetch fresh list if not available
                 if (allEmployeesList.length === 0) {
                     try {
                         const data = await fetchApi('getEmployeeSalesData', currentStore, currentFrom, currentTo, null);
@@ -655,13 +654,11 @@
             
             function openReportModal() {
                 populateEmployeeDropdown();
-                // Set default to today
                 currentReportPreset = 'today';
                 const todayStr = getTodayYMD();
                 reportFrom = todayStr;
                 reportTo = todayStr;
                 reportModal.classList.add('active');
-                // Reset UI
                 document.querySelectorAll('[data-report-preset]').forEach(btn => btn.style.backgroundColor = '');
                 const todayOption = document.querySelector('[data-report-preset="today"]');
                 if (todayOption) todayOption.style.backgroundColor = '#eef2ff';
@@ -699,9 +696,7 @@
                     document.getElementById('reportCustomRange').style.display = 'none';
                 } else if (preset === 'custom') {
                     document.getElementById('reportCustomRange').style.display = 'block';
-                    // No auto assign, user will pick
                 }
-                // Highlight selected preset
                 document.querySelectorAll('[data-report-preset]').forEach(btn => btn.style.backgroundColor = '');
                 const selected = document.querySelector(`[data-report-preset="${preset}"]`);
                 if (selected) selected.style.backgroundColor = '#eef2ff';
@@ -725,7 +720,7 @@
                 const employeeId = reportEmployeeSelect.value;
                 const employeeName = employeeId === 'all' ? 'All Employees' : reportEmployeeSelect.options[reportEmployeeSelect.selectedIndex]?.text || 'Selected';
                 
-                showError(''); // clear
+                showError('');
                 const loadingMsg = document.createElement('div');
                 loadingMsg.innerText = 'Generating report...';
                 loadingMsg.style.position = 'fixed'; loadingMsg.style.bottom = '20px'; loadingMsg.style.left = '20px';
@@ -734,30 +729,28 @@
                 document.body.appendChild(loadingMsg);
                 
                 try {
-                    // Fetch receipts for the store and date range
                     let url = `${BACKEND_URL}?action=getReceipts&store=${currentStore}&from=${reportFrom}&to=${reportTo}&employeeId=all`;
                     const response = await fetch(url);
                     const result = await response.json();
                     if (!result.success || !result.receipts) throw new Error('Failed to fetch receipt data');
                     
                     let receipts = result.receipts;
-                    // Filter by employee if specific is chosen
                     if (employeeId !== 'all') {
                         const selectedEmpName = reportEmployeeSelect.options[reportEmployeeSelect.selectedIndex]?.text;
                         receipts = receipts.filter(r => r.sales_person_name === selectedEmpName || r.employee_name === selectedEmpName);
                     }
                     
-                    // Aggregate daily sales per employee: { employeeName: { date: total } }
-                    const dailyMap = new Map(); // key "employeeName|date"
+                    const dailyMap = new Map();
+                    let grandTotal = 0;
                     for (const rec of receipts) {
                         const emp = rec.sales_person_name || rec.employee_name || 'Unknown';
                         const date = rec.timestamp ? rec.timestamp.split('T')[0] : 'Unknown';
                         const total = parseFloat(rec.total) || 0;
                         const key = `${emp}|${date}`;
                         dailyMap.set(key, (dailyMap.get(key) || 0) + total);
+                        grandTotal += total;
                     }
                     
-                    // Convert to array of objects
                     const rows = [];
                     for (const [key, total] of dailyMap.entries()) {
                         const [employee, date] = key.split('|');
@@ -765,18 +758,20 @@
                     }
                     rows.sort((a,b) => a.date.localeCompare(b.date) || a.employee.localeCompare(b.employee));
                     
-                    // Build CSV content
                     const headers = ['Employee Name', 'Date (YYYY-MM-DD)', 'Total Sales (RM)'];
                     const csvRows = [headers.join(',')];
                     for (const row of rows) {
                         csvRows.push(`"${row.employee}","${row.date}",${row.total.toFixed(2)}`);
                     }
+                    // Add Grand Total row
+                    csvRows.push(`"GRAND TOTAL","",${grandTotal.toFixed(2)}`);
+                    
                     const csvContent = csvRows.join('\n');
                     const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
                     const link = document.createElement('a');
                     const urlFile = URL.createObjectURL(blob);
                     link.href = urlFile;
-                    link.setAttribute('download', `sales_report_${currentStore}_${reportFrom}_to_${reportTo}_${employeeName}.csv`);
+                    link.setAttribute('download', `sales_report_${currentStore}_${reportFrom}_to_${reportTo}_${employeeName.replace(/\s/g, '_')}.csv`);
                     document.body.appendChild(link);
                     link.click();
                     document.body.removeChild(link);
@@ -792,7 +787,7 @@
             
             // Event handlers for report modal
             downloadReportBtn.addEventListener('click', openReportModal);
-            closeReportModal.addEventListener('click', closeReportModal);
+            closeReportModalBtn.addEventListener('click', closeReportModal);
             generateReportBtn.addEventListener('click', generateCSVReport);
             document.querySelectorAll('[data-report-preset]').forEach(btn => {
                 btn.addEventListener('click', () => {
