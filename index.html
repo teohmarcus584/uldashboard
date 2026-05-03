@@ -76,6 +76,9 @@
         .payment-amount { font-weight: 800; font-size: 1.2rem; margin-top: 6px; }
         .section-card { background: white; border-radius: 32px; padding: 20px 18px; margin-bottom: 28px; border: 1px solid #eef2f8; }
         .section-title { font-weight: 800; font-size: 1.2rem; margin-bottom: 18px; border-left: 5px solid #2b6e9e; padding-left: 14px; }
+        .staff-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 12px; }
+        .download-report-btn { background: #2b6e9e; color: white; border: none; border-radius: 40px; padding: 8px 18px; font-weight: 600; font-size: 0.85rem; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: 0.2s; }
+        .download-report-btn:hover { background: #1e5a85; transform: scale(1.02); }
         .note { font-size: 0.7rem; color: #6c86a3; margin-top: 8px; text-align: right; font-style: italic; }
         .mini-table { width: 100%; font-size: 0.9rem; border-collapse: collapse; }
         .mini-table th, .mini-table td { padding: 14px 8px; text-align: left; border-bottom: 1px solid #ecf0f5; }
@@ -84,6 +87,8 @@
         canvas { max-height: 260px; width: 100%; margin-top: 8px; }
         .refresh-spin { animation: spin 0.6s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        /* Modal styles */
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); backdrop-filter: blur(3px); z-index: 1000; display: flex; align-items: flex-end; justify-content: center; visibility: hidden; opacity: 0; transition: 0.2s; }
         .modal-overlay.active { visibility: visible; opacity: 1; }
         .modal-bottom { background: white; width: 100%; max-width: 520px; border-radius: 32px 32px 0 0; padding: 24px 20px 32px; transform: translateY(100%); transition: transform 0.25s ease-out; }
@@ -98,6 +103,9 @@
         .product-table-container { max-height: 420px; overflow-y: auto; border-radius: 24px; }
         @media (max-width: 640px) { .kpi-value { font-size: 1.8rem; } .date-trigger-btn { padding: 8px 16px; font-size: 0.85rem; } .store-name { max-width: 110px; } }
         .date-label-today { font-weight: 700; color: #2b6e9e; }
+        .employee-select { width: 100%; padding: 14px; border-radius: 40px; border: 1px solid #dce3ec; margin: 12px 0 8px; font-size: 1rem; background: white; }
+        .generate-btn { background: #2b6e9e; color: white; border: none; border-radius: 60px; padding: 14px; width: 100%; font-weight: 700; font-size: 1rem; margin-top: 16px; cursor: pointer; }
+        .generate-btn:hover { background: #1e5a85; }
     </style>
 </head>
 <body>
@@ -118,16 +126,48 @@
         <div class="kpi-card"><div class="kpi-label">ITEMS SOLD</div><div class="kpi-value" id="itemsSold">—</div></div>
         <div class="kpi-card"><div class="kpi-label">AVG. TICKET</div><div class="kpi-value" id="avgTicket">—</div></div>
     </div>
-    <div class="section-card"><div class="section-title">👥 Staff Sales Summary</div><div id="staffSalesList">Loading...</div></div>
+    <div class="section-card">
+        <div class="staff-header">
+            <div class="section-title" style="margin-bottom:0; border-left: none;">👥 Staff Sales Summary</div>
+            <button class="download-report-btn" id="downloadReportBtn">📎 Download Sales Report</button>
+        </div>
+        <div id="staffSalesList">Loading...</div>
+    </div>
     <div class="section-card"><div class="section-title">💵 Payment Breakdown</div><div class="payment-breakdown"><div class="payment-item"><div class="payment-method">Cash</div><div class="payment-amount" id="cashAmount">—</div></div><div class="payment-item"><div class="payment-method">Card</div><div class="payment-amount" id="cardAmount">—</div></div><div class="payment-item"><div class="payment-method">Alipay</div><div class="payment-amount" id="alipayAmount">—</div></div><div class="payment-item"><div class="payment-method">TnG</div><div class="payment-amount" id="otherAmount">—</div></div><div class="payment-item"><div class="payment-method">Refunds</div><div class="payment-amount" id="refundAmount">—</div></div></div></div>
     <div class="section-card"><div class="chart-header"><div class="section-title" style="margin-bottom:0; border-left: none;">📈 Sales Trend</div><div class="toggle-group" id="chartToggleGroup"><button class="toggle-btn active" data-chart-type="line">Line</button><button class="toggle-btn" data-chart-type="bar">Bar</button></div></div><canvas id="trendChart"></canvas></div>
     <div class="section-card"><div class="section-title">🏆 Top Products (all items - full list)</div><div id="productsList" class="product-table-container">Loading...</div><div class="note">* Amounts shown are after all discounts (promotions, buy-X-free-Y, staff discounts).</div></div>
     <div class="section-card"><div class="section-title">📊 Sales by Category</div><div id="categorySalesList">Loading...</div><div class="note">* Category totals also reflect discounted revenue.</div></div>
 </div>
 
-<!-- Modals -->
+<!-- Store Modal -->
 <div id="storeModal" class="modal-overlay"><div class="modal-bottom"><div class="modal-title">🏬 Select Store</div><div class="store-option" data-store="all" data-name="All Stores">🏢 All Stores (Combined)</div><div class="store-option" data-store="queens" data-name="Queensbay Mall">Queensbay Mall</div><div class="store-option" data-store="sunshine" data-name="Sunshine Central">Sunshine Central</div><div class="store-option" data-store="gurney_paragon" data-name="Gurney Paragon">Gurney Paragon</div><button class="close-modal" id="closeStoreModal">Cancel</button></div></div>
+
+<!-- Date Modal (main dashboard) -->
 <div id="dateModal" class="modal-overlay"><div class="modal-bottom"><div class="modal-title">📅 Select Range</div><div class="preset-option" data-preset="today">Today</div><div class="preset-option" data-preset="week">This Week</div><div class="preset-option" data-preset="month">This Month</div><div class="preset-option" data-preset="year">This Year</div><div class="divider"></div><div class="preset-option" data-preset="custom">📆 Custom</div><div id="customDateRange" style="display: none;"><div class="date-range-custom"><input type="date" id="customFromDate"><input type="date" id="customToDate"><button class="apply-custom" id="applyCustomBtn">Apply</button></div></div><button class="close-modal" id="closeDateModal">Close</button></div></div>
+
+<!-- Download Report Modal -->
+<div id="reportDownloadModal" class="modal-overlay">
+    <div class="modal-bottom">
+        <div class="modal-title">📊 Generate Sales Report (CSV)</div>
+        <div class="preset-option" data-report-preset="today">Today</div>
+        <div class="preset-option" data-report-preset="week">This Week</div>
+        <div class="preset-option" data-report-preset="month">This Month</div>
+        <div class="preset-option" data-report-preset="year">This Year</div>
+        <div class="divider"></div>
+        <div class="preset-option" data-report-preset="custom">📆 Custom Range</div>
+        <div id="reportCustomRange" style="display: none;">
+            <div class="date-range-custom">
+                <input type="date" id="reportFromDate">
+                <input type="date" id="reportToDate">
+            </div>
+        </div>
+        <select id="reportEmployeeSelect" class="employee-select">
+            <option value="all">👥 All Employees</option>
+        </select>
+        <button id="generateReportBtn" class="generate-btn">📎 Generate CSV Report</button>
+        <button class="close-modal" id="closeReportModal">Cancel</button>
+    </div>
+</div>
 
 <script>
     (function() {
@@ -141,8 +181,14 @@
             const storeNameSpan = document.getElementById('storeNameLabel');
             const dateRangeLabelSpan = document.getElementById('dateRangeLabel');
             const errorDiv = document.getElementById('errorMsg');
+            const downloadReportBtn = document.getElementById('downloadReportBtn');
+            const reportModal = document.getElementById('reportDownloadModal');
+            const closeReportModal = document.getElementById('closeReportModal');
+            const generateReportBtn = document.getElementById('generateReportBtn');
+            const reportEmployeeSelect = document.getElementById('reportEmployeeSelect');
+            const reportCustomRangeDiv = document.getElementById('reportCustomRange');
             
-            if (!refreshBtn || !leftArrowBtn || !rightArrowBtn || !dateTriggerBtn || !storeSelectorBtn) {
+            if (!refreshBtn || !leftArrowBtn || !rightArrowBtn || !dateTriggerBtn || !storeSelectorBtn || !downloadReportBtn) {
                 console.error("Critical DOM elements missing");
                 return;
             }
@@ -159,15 +205,16 @@
             let currentStoreDisplay = "Queensbay Mall";
             let currentFrom = "", currentTo = "";
             let currentPresetType = "day";
-            let currentDayDate = null;   // stored as Date object (local midnight)
+            let currentDayDate = null;
             let lastLoadedFrom = "", lastLoadedTo = "", lastLoadedStore = "";
             let hasData = false;
             let refreshInProgress = false;
             let preloadTimer = null;
             let initialPreloadDone = false;
             let currentChartType = "line";
+            let allEmployeesList = [];  // store { id, name }
             
-            // Helper: get today's YYYY-MM-DD in local time (string comparison safe)
+            // Helper: get today's YYYY-MM-DD in local time
             function getTodayYMD() {
                 const d = new Date();
                 const year = d.getFullYear();
@@ -177,7 +224,6 @@
             }
             const TODAY_YMD = getTodayYMD();
             
-            // Format a Date object (local) to YYYY-MM-DD
             function formatYMD(date) {
                 const year = date.getFullYear();
                 const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -185,7 +231,6 @@
                 return `${year}-${month}-${day}`;
             }
             
-            // Parse YYYY-MM-DD to local Date at midnight
             function parseYMD(ymd) {
                 const [year, month, day] = ymd.split('-').map(Number);
                 return new Date(year, month - 1, day);
@@ -205,24 +250,15 @@
             function getCached(a,s,f,t) { const e = cache.get(getCacheKey(a,s,f,t)); if (e && (Date.now() - e.timestamp) < CACHE_TTL) return e.data; return null; }
             function setCache(a,s,f,t,d) { cache.set(getCacheKey(a,s,f,t), { data: d, timestamp: Date.now() }); }
             
-            // Compare YYYY-MM-DD strings directly (lexicographic works because of zero padding)
-            function isFutureDate(ymd) {
-                return ymd > TODAY_YMD;
-            }
-            function isTodayDate(ymd) {
-                return ymd === TODAY_YMD;
-            }
+            function isFutureDate(ymd) { return ymd > TODAY_YMD; }
+            function isTodayDate(ymd) { return ymd === TODAY_YMD; }
             
-            // Update the date label intelligently: show "Today" for current day, otherwise formatted
             function updateDateLabel() {
                 if (currentPresetType === 'custom') {
                     dateRangeLabelSpan.innerText = `${currentFrom} → ${currentTo}`;
                 } else if (currentPresetType === 'day') {
-                    if (isTodayDate(currentFrom)) {
-                        dateRangeLabelSpan.innerText = "Today";
-                    } else {
-                        dateRangeLabelSpan.innerText = currentFrom;
-                    }
+                    if (isTodayDate(currentFrom)) dateRangeLabelSpan.innerText = "Today";
+                    else dateRangeLabelSpan.innerText = currentFrom;
                 } else if (currentPresetType === 'week') {
                     dateRangeLabelSpan.innerText = `Week of ${currentFrom}`;
                 } else if (currentPresetType === 'month') {
@@ -270,13 +306,9 @@
             }
             
             function updateArrowDisabledState() {
-                if (currentPresetType === 'custom') {
-                    rightArrowBtn.disabled = true;
-                    return;
-                }
+                if (currentPresetType === 'custom') { rightArrowBtn.disabled = true; return; }
                 let nextRange = getAdjacentRange('next');
                 if (!nextRange) { rightArrowBtn.disabled = true; return; }
-                // Use string comparison to avoid timezone issues
                 rightArrowBtn.disabled = isFutureDate(nextRange.from);
             }
             
@@ -393,7 +425,6 @@
                     return;
                 }
                 const delta = dir === 'left' ? -1 : 1;
-                // Check future before shifting
                 if (delta === 1) {
                     const nextRange = getAdjacentRange('next');
                     if (nextRange && isFutureDate(nextRange.from)) {
@@ -491,6 +522,12 @@
                     fetchApi('getDiscountedProductSalesReport', s, f, t, sig),
                     fetchApi('getEmployeeSalesData', s, f, t, sig)
                 ]);
+                // Store employees list for later use in report modal
+                if (employees && employees.labels && employees.data) {
+                    allEmployeesList = employees.labels.map((name, idx) => ({ id: idx, name: name }));
+                } else {
+                    allEmployeesList = [];
+                }
                 return { sales, chart, products, employees };
             }
             
@@ -542,7 +579,7 @@
                     const rev = new Map(), qty = new Map();
                     products.products.forEach(p => { const c = p.category || 'Uncategorized'; rev.set(c, (rev.get(c) || 0) + p.total); qty.set(c, (qty.get(c) || 0) + (p.quantity || 0)); });
                     const sorted = Array.from(rev.entries()).sort((a,b) => b[1] - a[1]);
-                    let h = '<table class="mini-table"><thead></tr><th>Category</th><th>Quantity Sold</th><th>Total Sales (RM)</th></tr></thead><tbody>';
+                    let h = '<table class="mini-table"><thead><tr><th>Category</th><th>Quantity Sold</th><th>Total Sales (RM)</th></tr></thead><tbody>';
                     sorted.forEach(([c, amt]) => { h += `<tr><td><strong>${escapeHtml(c)}</strong></td><td>${formatNumber(qty.get(c))}</td><td>${formatMYR(amt)}</td></tr>`; });
                     h += '</tbody></table>';
                     catDiv.innerHTML = h;
@@ -554,7 +591,7 @@
                     const allProducts = [...products.products].sort((a,b) => (b.total || 0) - (a.total || 0));
                     let h = '<table class="mini-table"><thead><tr><th>Product</th><th>Qty Sold</th><th>Revenue (RM)</th></tr></thead><tbody>';
                     allProducts.forEach(p => { h += `<tr><td><strong>${escapeHtml(p.name || '')}</strong><br><span class="badge">${p.category || ''}</span></td><td>${formatNumber(p.quantity)}</td><td>${formatMYR(p.total)}</td></tr>`; });
-                    h += '</tbody></table>';
+                    h += '</tbody></tr>';
                     prodDiv.innerHTML = h;
                 }
                 
@@ -593,7 +630,179 @@
             function showError(msg) { errorDiv.innerText = msg; errorDiv.style.display = 'block'; setTimeout(() => errorDiv.style.display = 'none', 4000); }
             function escapeHtml(s) { if (!s) return ''; return s.replace(/[&<>]/g, m => m === '&' ? '&amp;' : m === '<' ? '&lt;' : '&gt;'); }
             
-            // Modal logic
+            // ---------- Download Report Modal Functions ----------
+            async function populateEmployeeDropdown() {
+                // Fetch fresh list if not available
+                if (allEmployeesList.length === 0) {
+                    try {
+                        const data = await fetchApi('getEmployeeSalesData', currentStore, currentFrom, currentTo, null);
+                        if (data && data.labels) {
+                            allEmployeesList = data.labels.map((name, idx) => ({ id: idx, name: name }));
+                        }
+                    } catch(e) { console.warn(e); }
+                }
+                reportEmployeeSelect.innerHTML = '<option value="all">👥 All Employees</option>';
+                allEmployeesList.forEach(emp => {
+                    const opt = document.createElement('option');
+                    opt.value = emp.id;
+                    opt.textContent = emp.name;
+                    reportEmployeeSelect.appendChild(opt);
+                });
+            }
+            
+            let currentReportPreset = null;
+            let reportFrom = '', reportTo = '';
+            
+            function openReportModal() {
+                populateEmployeeDropdown();
+                // Set default to today
+                currentReportPreset = 'today';
+                const todayStr = getTodayYMD();
+                reportFrom = todayStr;
+                reportTo = todayStr;
+                reportModal.classList.add('active');
+                // Reset UI
+                document.querySelectorAll('[data-report-preset]').forEach(btn => btn.style.backgroundColor = '');
+                const todayOption = document.querySelector('[data-report-preset="today"]');
+                if (todayOption) todayOption.style.backgroundColor = '#eef2ff';
+                document.getElementById('reportCustomRange').style.display = 'none';
+            }
+            
+            function closeReportModal() {
+                reportModal.classList.remove('active');
+            }
+            
+            function setReportPreset(preset) {
+                currentReportPreset = preset;
+                const today = new Date();
+                if (preset === 'today') {
+                    const d = formatYMD(today);
+                    reportFrom = d;
+                    reportTo = d;
+                    document.getElementById('reportCustomRange').style.display = 'none';
+                } else if (preset === 'week') {
+                    let start = getWeekStart(today);
+                    let end = new Date(start);
+                    end.setDate(start.getDate() + 6);
+                    reportFrom = formatYMD(start);
+                    reportTo = formatYMD(end);
+                    document.getElementById('reportCustomRange').style.display = 'none';
+                } else if (preset === 'month') {
+                    let start = new Date(today.getFullYear(), today.getMonth(), 1);
+                    let end = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+                    reportFrom = formatYMD(start);
+                    reportTo = formatYMD(end);
+                    document.getElementById('reportCustomRange').style.display = 'none';
+                } else if (preset === 'year') {
+                    reportFrom = formatYMD(new Date(today.getFullYear(), 0, 1));
+                    reportTo = formatYMD(new Date(today.getFullYear(), 11, 31));
+                    document.getElementById('reportCustomRange').style.display = 'none';
+                } else if (preset === 'custom') {
+                    document.getElementById('reportCustomRange').style.display = 'block';
+                    // No auto assign, user will pick
+                }
+                // Highlight selected preset
+                document.querySelectorAll('[data-report-preset]').forEach(btn => btn.style.backgroundColor = '');
+                const selected = document.querySelector(`[data-report-preset="${preset}"]`);
+                if (selected) selected.style.backgroundColor = '#eef2ff';
+            }
+            
+            async function generateCSVReport() {
+                if (currentReportPreset === 'custom') {
+                    const fromInput = document.getElementById('reportFromDate').value;
+                    const toInput = document.getElementById('reportToDate').value;
+                    if (!fromInput || !toInput) {
+                        showError('Please select both dates for custom range');
+                        return;
+                    }
+                    if (fromInput > toInput) { showError('Invalid date range'); return; }
+                    if (isFutureDate(fromInput)) { showError('Start date cannot be in the future'); return; }
+                    reportFrom = fromInput;
+                    reportTo = toInput;
+                }
+                if (!reportFrom || !reportTo) { showError('Invalid date range'); return; }
+                
+                const employeeId = reportEmployeeSelect.value;
+                const employeeName = employeeId === 'all' ? 'All Employees' : reportEmployeeSelect.options[reportEmployeeSelect.selectedIndex]?.text || 'Selected';
+                
+                showError(''); // clear
+                const loadingMsg = document.createElement('div');
+                loadingMsg.innerText = 'Generating report...';
+                loadingMsg.style.position = 'fixed'; loadingMsg.style.bottom = '20px'; loadingMsg.style.left = '20px';
+                loadingMsg.style.background = '#1e4668'; loadingMsg.style.color = 'white'; loadingMsg.style.padding = '10px 20px';
+                loadingMsg.style.borderRadius = '40px'; loadingMsg.style.zIndex = '2000';
+                document.body.appendChild(loadingMsg);
+                
+                try {
+                    // Fetch receipts for the store and date range
+                    let url = `${BACKEND_URL}?action=getReceipts&store=${currentStore}&from=${reportFrom}&to=${reportTo}&employeeId=all`;
+                    const response = await fetch(url);
+                    const result = await response.json();
+                    if (!result.success || !result.receipts) throw new Error('Failed to fetch receipt data');
+                    
+                    let receipts = result.receipts;
+                    // Filter by employee if specific is chosen
+                    if (employeeId !== 'all') {
+                        const selectedEmpName = reportEmployeeSelect.options[reportEmployeeSelect.selectedIndex]?.text;
+                        receipts = receipts.filter(r => r.sales_person_name === selectedEmpName || r.employee_name === selectedEmpName);
+                    }
+                    
+                    // Aggregate daily sales per employee: { employeeName: { date: total } }
+                    const dailyMap = new Map(); // key "employeeName|date"
+                    for (const rec of receipts) {
+                        const emp = rec.sales_person_name || rec.employee_name || 'Unknown';
+                        const date = rec.timestamp ? rec.timestamp.split('T')[0] : 'Unknown';
+                        const total = parseFloat(rec.total) || 0;
+                        const key = `${emp}|${date}`;
+                        dailyMap.set(key, (dailyMap.get(key) || 0) + total);
+                    }
+                    
+                    // Convert to array of objects
+                    const rows = [];
+                    for (const [key, total] of dailyMap.entries()) {
+                        const [employee, date] = key.split('|');
+                        rows.push({ employee, date, total });
+                    }
+                    rows.sort((a,b) => a.date.localeCompare(b.date) || a.employee.localeCompare(b.employee));
+                    
+                    // Build CSV content
+                    const headers = ['Employee Name', 'Date (YYYY-MM-DD)', 'Total Sales (RM)'];
+                    const csvRows = [headers.join(',')];
+                    for (const row of rows) {
+                        csvRows.push(`"${row.employee}","${row.date}",${row.total.toFixed(2)}`);
+                    }
+                    const csvContent = csvRows.join('\n');
+                    const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
+                    const link = document.createElement('a');
+                    const urlFile = URL.createObjectURL(blob);
+                    link.href = urlFile;
+                    link.setAttribute('download', `sales_report_${currentStore}_${reportFrom}_to_${reportTo}_${employeeName}.csv`);
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    URL.revokeObjectURL(urlFile);
+                    closeReportModal();
+                } catch (err) {
+                    console.error(err);
+                    showError('Failed to generate report: ' + err.message);
+                } finally {
+                    loadingMsg.remove();
+                }
+            }
+            
+            // Event handlers for report modal
+            downloadReportBtn.addEventListener('click', openReportModal);
+            closeReportModal.addEventListener('click', closeReportModal);
+            generateReportBtn.addEventListener('click', generateCSVReport);
+            document.querySelectorAll('[data-report-preset]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const preset = btn.getAttribute('data-report-preset');
+                    setReportPreset(preset);
+                });
+            });
+            reportModal.addEventListener('click', (e) => { if (e.target === reportModal) closeReportModal(); });
+            
+            // Existing modal logic
             const storeModal = document.getElementById('storeModal');
             const dateModal = document.getElementById('dateModal');
             function openStoreModal() { storeModal.classList.add('active'); }
@@ -611,7 +820,6 @@
                 closeDateModal();
             }
             
-            // Event listeners
             refreshBtn.addEventListener('click', refreshDashboard);
             leftArrowBtn.addEventListener('click', () => shiftDateRange('left'));
             rightArrowBtn.addEventListener('click', () => shiftDateRange('right'));
@@ -636,13 +844,13 @@
                 else if (trendChart && trendChart.data) renderChartWithData({ salesByDay: { labels: trendChart.data.labels, data: trendChart.data.datasets[0].data } });
             }));
             
-            // Initial load: today (using local date to avoid timezone shift)
+            // Initial load: today
             const todayNow = new Date();
             currentPresetType = 'day';
             currentDayDate = new Date(todayNow);
             currentFrom = formatYMD(currentDayDate);
             currentTo = currentFrom;
-            updateDateLabel();   // Will display "Today" because isTodayDate == true
+            updateDateLabel();
             storeNameSpan.innerText = "Queensbay Mall";
             refreshDashboard();
         });
