@@ -12,7 +12,6 @@
         .dashboard-container { width: 100%; padding: 0 20px; }
         @media (min-width: 1400px) { .dashboard-container { padding: 0 40px; } }
         
-        /* HEADER: perfect center alignment for date controls using GRID */
         .app-header {
             background: white; padding: 12px 20px; border-bottom: 1px solid #eef2f8;
             display: grid;
@@ -31,7 +30,6 @@
         }
         .refresh-icon:hover { background: #e4e9f2; }
         
-        /* Store selector as a proper button */
         .store-selector-btn {
             justify-self: end;
             background: white;
@@ -58,7 +56,6 @@
         }
         .store-name { font-weight: 700; max-width: 160px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         
-        /* DATE CONTROL — centered & aligned */
         .date-control {
             display: flex;
             align-items: center;
@@ -110,8 +107,6 @@
         canvas { max-height: 260px; width: 100%; margin-top: 8px; }
         .refresh-spin { animation: spin 0.6s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        
-        /* Modal styles */
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); backdrop-filter: blur(3px); z-index: 1000; display: flex; align-items: flex-end; justify-content: center; visibility: hidden; opacity: 0; transition: 0.2s; }
         .modal-overlay.active { visibility: visible; opacity: 1; }
         .modal-bottom { background: white; width: 100%; max-width: 520px; border-radius: 32px 32px 0 0; padding: 24px 20px 32px; transform: translateY(100%); transition: transform 0.25s ease-out; }
@@ -169,7 +164,7 @@
 <!-- Store Modal -->
 <div id="storeModal" class="modal-overlay"><div class="modal-bottom"><div class="modal-title">🏬 Select Store</div><div class="store-option" data-store="all" data-name="All Stores">🏢 All Stores (Combined)</div><div class="store-option" data-store="queens" data-name="Queensbay Mall">Queensbay Mall</div><div class="store-option" data-store="sunshine" data-name="Sunshine Central">Sunshine Central</div><div class="store-option" data-store="gurney_paragon" data-name="Gurney Paragon">Gurney Paragon</div><button class="close-modal" id="closeStoreModal">Cancel</button></div></div>
 
-<!-- Date Modal (main dashboard) -->
+<!-- Date Modal -->
 <div id="dateModal" class="modal-overlay"><div class="modal-bottom"><div class="modal-title">📅 Select Range</div><div class="preset-option" data-preset="today">Today</div><div class="preset-option" data-preset="week">This Week</div><div class="preset-option" data-preset="month">This Month</div><div class="preset-option" data-preset="year">This Year</div><div class="divider"></div><div class="preset-option" data-preset="custom">📆 Custom</div><div id="customDateRange" style="display: none;"><div class="date-range-custom"><input type="date" id="customFromDate"><input type="date" id="customToDate"><button class="apply-custom" id="applyCustomBtn">Apply</button></div></div><button class="close-modal" id="closeDateModal">Close</button></div></div>
 
 <!-- Download Report Modal -->
@@ -213,7 +208,6 @@
             const closeReportModalBtn = document.getElementById('closeReportDownloadModal');
             const generateReportBtn = document.getElementById('generateReportBtn');
             const reportEmployeeSelect = document.getElementById('reportEmployeeSelect');
-            const reportCustomRangeDiv = document.getElementById('reportCustomRange');
             
             if (!refreshBtn || !leftArrowBtn || !rightArrowBtn || !dateTriggerBtn || !storeSelectorBtn || !downloadReportBtn) {
                 console.error("Critical DOM elements missing");
@@ -564,7 +558,7 @@
                             name: emp.name
                         }));
                     } else {
-                        console.warn("Failed to fetch employees, using fallback");
+                        console.warn("Failed to fetch employees");
                         allEmployeesList = [];
                     }
                 } catch (err) {
@@ -622,7 +616,7 @@
                     products.products.forEach(p => { const c = p.category || 'Uncategorized'; rev.set(c, (rev.get(c) || 0) + p.total); qty.set(c, (qty.get(c) || 0) + (p.quantity || 0)); });
                     const sorted = Array.from(rev.entries()).sort((a,b) => b[1] - a[1]);
                     let h = '<table class="mini-table"><thead><tr><th>Category</th><th>Quantity Sold</th><th>Total Sales (RM)</th></tr></thead><tbody>';
-                    sorted.forEach(([c, amt]) => { h += `<tr><td><strong>${escapeHtml(c)}</strong></span></td><td>${formatNumber(qty.get(c))}</span></td><td>${formatMYR(amt)}</span></tr>`; });
+                    sorted.forEach(([c, amt]) => { h += `<tr><td><strong>${escapeHtml(c)}</strong></td><td>${formatNumber(qty.get(c))}</span></td><td>${formatMYR(amt)}</span></tr>`; });
                     h += '</tbody></table>';
                     catDiv.innerHTML = h;
                 }
@@ -632,8 +626,8 @@
                 else {
                     const allProducts = [...products.products].sort((a,b) => (b.total || 0) - (a.total || 0));
                     let h = '<table class="mini-table"><thead><tr><th>Product</th><th>Qty Sold</th><th>Revenue (RM)</th></tr></thead><tbody>';
-                    allProducts.forEach(p => { h += `<tr><td><strong>${escapeHtml(p.name || '')}</strong><br><span class="badge">${p.category || ''}</span></td><td>${formatNumber(p.quantity)}</td><td>${formatMYR(p.total)}</td></tr>`; });
-                    h += '</tbody></table>';
+                    allProducts.forEach(p => { h += `<tr><td><strong>${escapeHtml(p.name || '')}</strong><br><span class="badge">${p.category || ''}</span></td><td>${formatNumber(p.quantity)}</span></td><td>${formatMYR(p.total)}</span></tr>`; });
+                    h += '</tbody><tr>';
                     prodDiv.innerHTML = h;
                 }
                 
@@ -672,7 +666,7 @@
             function showError(msg) { errorDiv.innerText = msg; errorDiv.style.display = 'block'; setTimeout(() => errorDiv.style.display = 'none', 4000); }
             function escapeHtml(s) { if (!s) return ''; return s.replace(/[&<>]/g, m => m === '&' ? '&amp;' : m === '<' ? '&lt;' : '&gt;'); }
             
-            // ---------- Download Report Modal Functions ----------
+            // ---------- Download Report (Long format, per employee all dates) ----------
             function populateEmployeeDropdown() {
                 if (allEmployeesList.length === 0) {
                     reportEmployeeSelect.innerHTML = '<option value="all">👥 Loading employees...</option>';
@@ -751,6 +745,89 @@
                 if (selected) selected.style.backgroundColor = '#eef2ff';
             }
             
+            // Generate CSV: one row per (employee, date) for every date in the range
+            // Added blank rows before each employee separator and before grand total
+            function generateLongFormatCSV(receipts, employeeList, fromYMD, toYMD, selectedEmployeeName) {
+                // Build a map: employee -> { date: total }
+                const salesMap = new Map(); // key = employee|date
+                for (const rec of receipts) {
+                    const emp = rec.sales_person_name || rec.employee_name || 'Unknown';
+                    if (selectedEmployeeName && emp !== selectedEmployeeName) continue;
+                    const date = rec.timestamp ? rec.timestamp.split('T')[0] : null;
+                    if (!date) continue;
+                    const total = parseFloat(rec.total) || 0;
+                    const key = `${emp}|${date}`;
+                    salesMap.set(key, (salesMap.get(key) || 0) + total);
+                }
+                
+                // Determine which employees to include
+                let targetEmployees = [];
+                if (selectedEmployeeName) {
+                    targetEmployees = [selectedEmployeeName];
+                } else {
+                    // Include all employees from the system list, plus any that appear in receipts but not in system
+                    const receiptEmployees = new Set();
+                    for (const rec of receipts) {
+                        const emp = rec.sales_person_name || rec.employee_name || 'Unknown';
+                        receiptEmployees.add(emp);
+                    }
+                    const allEmployeeNames = new Set([
+                        ...employeeList.map(e => e.name),
+                        ...receiptEmployees
+                    ]);
+                    targetEmployees = Array.from(allEmployeeNames).sort();
+                }
+                
+                // Generate all dates between fromYMD and toYMD inclusive
+                const dateList = [];
+                let current = parseYMD(fromYMD);
+                const endDate = parseYMD(toYMD);
+                while (current <= endDate) {
+                    dateList.push(formatYMD(current));
+                    current.setDate(current.getDate() + 1);
+                }
+                
+                const csvLines = [];
+                // Header row
+                csvLines.push(["Employee Name","Date (YYYY-MM-DD)","Total Sales (RM)"].join(","));
+                
+                // Empty row before first employee block
+                csvLines.push(["","",""].join(","));
+                
+                for (const emp of targetEmployees) {
+                    // Blank row before separator
+                    csvLines.push(["","",""].join(","));
+                    // Separator row (acts as a bold header for the employee)
+                    csvLines.push(`"=== ${emp.toUpperCase()} ===",,`);
+                    
+                    let empTotal = 0;
+                    for (const date of dateList) {
+                        const key = `${emp}|${date}`;
+                        const total = salesMap.get(key) || 0;
+                        csvLines.push(`"${emp}","${date}",${total.toFixed(2)}`);
+                        empTotal += total;
+                    }
+                    // Subtotal row for this employee
+                    csvLines.push(`"${emp}","TOTAL",${empTotal.toFixed(2)}`);
+                }
+                
+                // Grand total
+                let grandTotal = 0;
+                for (const emp of targetEmployees) {
+                    let empTotal = 0;
+                    for (const date of dateList) {
+                        const key = `${emp}|${date}`;
+                        empTotal += salesMap.get(key) || 0;
+                    }
+                    grandTotal += empTotal;
+                }
+                // Blank row before grand total
+                csvLines.push(["","",""].join(","));
+                csvLines.push(`"GRAND TOTAL","",${grandTotal.toFixed(2)}`);
+                
+                return csvLines.join("\n");
+            }
+            
             async function generateCSVReport() {
                 if (currentReportPreset === 'custom') {
                     const fromInput = document.getElementById('reportFromDate').value;
@@ -767,10 +844,10 @@
                 if (!reportFrom || !reportTo) { showError('Invalid date range'); return; }
                 
                 const employeeId = reportEmployeeSelect.value;
-                let employeeName = null;
+                let selectedEmployeeName = null;
                 if (employeeId !== 'all') {
-                    const selectedEmp = allEmployeesList.find(emp => emp.id == employeeId);
-                    employeeName = selectedEmp ? selectedEmp.name : null;
+                    const sel = allEmployeesList.find(emp => emp.id == employeeId);
+                    selectedEmployeeName = sel ? sel.name : null;
                 }
                 
                 showError('');
@@ -789,48 +866,18 @@
                     if (!result.success || !result.receipts) throw new Error('Failed to fetch receipt data: ' + (result.error || 'No receipts'));
                     
                     let receipts = result.receipts;
-                    if (employeeName) {
-                        receipts = receipts.filter(r => r.sales_person_name === employeeName || r.employee_name === employeeName);
+                    if (selectedEmployeeName) {
+                        receipts = receipts.filter(r => r.sales_person_name === selectedEmployeeName || r.employee_name === selectedEmployeeName);
                     }
                     
-                    if (receipts.length === 0) {
-                        showError('No receipts found for the selected period and employee.');
-                        loadingMsg.remove();
-                        return;
-                    }
+                    const csvContent = generateLongFormatCSV(receipts, allEmployeesList, reportFrom, reportTo, selectedEmployeeName);
                     
-                    const dailyMap = new Map();
-                    for (const rec of receipts) {
-                        const emp = rec.sales_person_name || rec.employee_name || 'Unknown';
-                        const date = rec.timestamp ? rec.timestamp.split('T')[0] : 'Unknown';
-                        const total = parseFloat(rec.total) || 0;
-                        const key = `${emp}|${date}`;
-                        dailyMap.set(key, (dailyMap.get(key) || 0) + total);
-                    }
-                    
-                    const rows = [];
-                    let grandTotal = 0;
-                    for (const [key, total] of dailyMap.entries()) {
-                        const [employee, date] = key.split('|');
-                        rows.push({ employee, date, total });
-                        grandTotal += total;
-                    }
-                    rows.sort((a,b) => a.date.localeCompare(b.date) || a.employee.localeCompare(b.employee));
-                    
-                    const headers = ['Employee Name', 'Date (YYYY-MM-DD)', 'Total Sales (RM)'];
-                    const csvRows = [headers.join(',')];
-                    for (const row of rows) {
-                        csvRows.push(`"${row.employee}","${row.date}",${row.total.toFixed(2)}`);
-                    }
-                    csvRows.push(`"TOTAL","",${grandTotal.toFixed(2)}`);
-                    
-                    const csvContent = csvRows.join('\n');
                     const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
                     const link = document.createElement('a');
                     const urlFile = URL.createObjectURL(blob);
                     link.href = urlFile;
-                    const displayEmployee = employeeName ? employeeName.replace(/\s/g, '_') : 'All_Employees';
-                    link.setAttribute('download', `sales_report_all_stores_${reportFrom}_to_${reportTo}_${displayEmployee}.csv`);
+                    const employeePart = selectedEmployeeName ? selectedEmployeeName.replace(/\s/g, '_') : 'All_Employees';
+                    link.setAttribute('download', `sales_report_all_stores_${reportFrom}_to_${reportTo}_${employeePart}.csv`);
                     document.body.appendChild(link);
                     link.click();
                     document.body.removeChild(link);
