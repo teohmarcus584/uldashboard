@@ -30,14 +30,33 @@
             transition: 0.2s;
         }
         .refresh-icon:hover { background: #e4e9f2; }
-        .store-selector {
+        
+        /* Store selector as a proper button */
+        .store-selector-btn {
             justify-self: end;
-            display: flex; align-items: center; gap: 8px; background: #f0f3f9;
-            padding: 6px 16px 6px 12px; border-radius: 60px; cursor: pointer;
-            transition: 0.2s;
+            background: white;
+            border: 1px solid #e2e8f0;
+            padding: 10px 20px;
+            border-radius: 50px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+            transition: 0.15s;
+            color: #1a2c42;
         }
-        .store-selector:hover { background: #e4e9f2; }
-        .store-name { font-weight: 600; font-size: 0.9rem; color: #1e4668; max-width: 160px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .store-selector-btn:hover {
+            background: #f8fafc;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.08);
+        }
+        .store-selector-btn:active {
+            transform: translateY(1px);
+        }
+        .store-name { font-weight: 700; max-width: 160px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         
         /* DATE CONTROL — centered & aligned */
         .date-control {
@@ -61,6 +80,10 @@
             font-weight: 700; font-size: 1rem; cursor: pointer; display: flex;
             align-items: center; gap: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.05);
             transition: 0.15s;
+        }
+        .date-trigger-btn:hover {
+            background: #f8fafc;
+            transform: translateY(-1px);
         }
         .chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; flex-wrap: wrap; gap: 12px; }
         .toggle-group { display: flex; background: #f0f3f9; border-radius: 50px; padding: 4px; }
@@ -94,9 +117,15 @@
         .modal-bottom { background: white; width: 100%; max-width: 520px; border-radius: 32px 32px 0 0; padding: 24px 20px 32px; transform: translateY(100%); transition: transform 0.25s ease-out; }
         .active .modal-bottom { transform: translateY(0); }
         .modal-title { font-weight: 700; font-size: 1.3rem; margin-bottom: 20px; text-align: center; }
+        .store-option, .preset-option { background: #f8fafd; padding: 16px 18px; margin-bottom: 12px; border-radius: 60px; font-weight: 600; font-size: 1rem; text-align: center; cursor: pointer; border: 1px solid #eef2f8; }
         .close-modal { margin-top: 20px; background: none; border: 1px solid #cfdfed; padding: 14px; border-radius: 60px; width: 100%; font-weight: 600; cursor: pointer; }
         .date-range-custom { margin-top: 16px; display: flex; gap: 12px; flex-wrap: wrap; }
         .date-range-custom input { flex: 1; padding: 12px; border-radius: 30px; border: 1px solid #dce3ec; font-size: 0.9rem; }
+        .apply-custom { background: #1e4668; color: white; border: none; border-radius: 40px; padding: 12px 18px; font-weight: 600; cursor: pointer; }
+        .divider { height: 1px; background: #eef2f8; margin: 20px 0; }
+        .product-table-container { max-height: 420px; overflow-y: auto; border-radius: 24px; }
+        @media (max-width: 640px) { .kpi-value { font-size: 1.8rem; } .date-trigger-btn { padding: 8px 16px; font-size: 0.85rem; } .store-name { max-width: 110px; } }
+        .date-label-today { font-weight: 700; color: #2b6e9e; }
         .employee-select { width: 100%; padding: 14px; border-radius: 40px; border: 1px solid #dce3ec; margin: 12px 0 8px; font-size: 1rem; background: white; }
         .generate-btn { background: #2b6e9e; color: white; border: none; border-radius: 60px; padding: 14px; width: 100%; font-weight: 700; font-size: 1rem; margin-top: 16px; cursor: pointer; }
         .generate-btn:hover { background: #1e5a85; }
@@ -110,7 +139,11 @@
         <button class="date-trigger-btn" id="dateTriggerBtn">📅 <span class="date-range-label" id="dateRangeLabel">Today</span></button>
         <button class="arrow-btn" id="rightArrowBtn">→</button>
     </div>
-    <div class="store-selector" id="storeSelectorBtn"><span class="store-icon-small">🏬</span><span class="store-name" id="storeNameLabel">Queensbay</span></div>
+    <button class="store-selector-btn" id="storeSelectorBtn">
+        <span>🏬</span>
+        <span class="store-name" id="storeNameLabel">Queensbay</span>
+        <span>▼</span>
+    </button>
 </div>
 <div class="dashboard-container">
     <div id="errorMsg" class="error-toast"></div>
@@ -139,14 +172,21 @@
 <!-- Date Modal (main dashboard) -->
 <div id="dateModal" class="modal-overlay"><div class="modal-bottom"><div class="modal-title">📅 Select Range</div><div class="preset-option" data-preset="today">Today</div><div class="preset-option" data-preset="week">This Week</div><div class="preset-option" data-preset="month">This Month</div><div class="preset-option" data-preset="year">This Year</div><div class="divider"></div><div class="preset-option" data-preset="custom">📆 Custom</div><div id="customDateRange" style="display: none;"><div class="date-range-custom"><input type="date" id="customFromDate"><input type="date" id="customToDate"><button class="apply-custom" id="applyCustomBtn">Apply</button></div></div><button class="close-modal" id="closeDateModal">Close</button></div></div>
 
-<!-- Download Report Modal (only custom date range + employee filter) -->
+<!-- Download Report Modal -->
 <div id="reportDownloadModal" class="modal-overlay">
     <div class="modal-bottom">
         <div class="modal-title">📊 Generate Sales Report (CSV)</div>
-        <!-- No preset options, only custom date range -->
-        <div class="date-range-custom" style="margin-top: 8px;">
-            <input type="date" id="reportFromDate" placeholder="From">
-            <input type="date" id="reportToDate" placeholder="To">
+        <div class="preset-option" data-report-preset="today">Today</div>
+        <div class="preset-option" data-report-preset="week">This Week</div>
+        <div class="preset-option" data-report-preset="month">This Month</div>
+        <div class="preset-option" data-report-preset="year">This Year</div>
+        <div class="divider"></div>
+        <div class="preset-option" data-report-preset="custom">📆 Custom Range</div>
+        <div id="reportCustomRange" style="display: none;">
+            <div class="date-range-custom">
+                <input type="date" id="reportFromDate">
+                <input type="date" id="reportToDate">
+            </div>
         </div>
         <select id="reportEmployeeSelect" class="employee-select">
             <option value="all">👥 All Employees</option>
@@ -173,6 +213,7 @@
             const closeReportModalBtn = document.getElementById('closeReportDownloadModal');
             const generateReportBtn = document.getElementById('generateReportBtn');
             const reportEmployeeSelect = document.getElementById('reportEmployeeSelect');
+            const reportCustomRangeDiv = document.getElementById('reportCustomRange');
             
             if (!refreshBtn || !leftArrowBtn || !rightArrowBtn || !dateTriggerBtn || !storeSelectorBtn || !downloadReportBtn) {
                 console.error("Critical DOM elements missing");
@@ -181,8 +222,7 @@
             
             // ----- Config & State -----
             const BACKEND_URL = "https://script.google.com/macros/s/AKfycbxEpeOAl41EjAxVnyEab3tJKOJFw4H9kYb5VfhiuFrJgmDEeLX54ILXOp0zh0ER8uJOeA/exec";
-            // The original POS backend that supports getReceipts
-            const RECEIPTS_BACKEND_URL = "https://script.google.com/macros/s/AKfycbynUwttCsy9qEtWNB_jZ2X6P5CPfL8B6ESnchm02SUi58A-G9-SYWzykfynC-L1HPVyVQ/exec";
+            const POS_BACKEND_URL = "https://script.google.com/macros/s/AKfycbynUwttCsy9qEtWNB_jZ2X6P5CPfL8B6ESnchm02SUi58A-G9-SYWzykfynC-L1HPVyVQ/exec";
             const CACHE_TTL = 60000;
             const PRELOAD_DELAY = 800;
             const cache = new Map();
@@ -200,7 +240,7 @@
             let preloadTimer = null;
             let initialPreloadDone = false;
             let currentChartType = "line";
-            let allEmployeesList = [];  // store { id, name }
+            let allEmployeesList = [];
             
             // Helper: get today's YYYY-MM-DD in local time
             function getTodayYMD() {
@@ -510,13 +550,27 @@
                     fetchApi('getDiscountedProductSalesReport', s, f, t, sig),
                     fetchApi('getEmployeeSalesData', s, f, t, sig)
                 ]);
-                // Store employees list for later use in report modal
-                if (employees && employees.labels && employees.data) {
-                    allEmployeesList = employees.labels.map((name, idx) => ({ id: idx, name: name }));
-                } else {
+                return { sales, chart, products, employees };
+            }
+            
+            async function fetchAllEmployees() {
+                try {
+                    const url = `${POS_BACKEND_URL}?action=getEmployees`;
+                    const response = await fetch(url);
+                    const result = await response.json();
+                    if (result.success && result.employees) {
+                        allEmployeesList = result.employees.map(emp => ({
+                            id: emp.id,
+                            name: emp.name
+                        }));
+                    } else {
+                        console.warn("Failed to fetch employees, using fallback");
+                        allEmployeesList = [];
+                    }
+                } catch (err) {
+                    console.error("Error fetching employees:", err);
                     allEmployeesList = [];
                 }
-                return { sales, chart, products, employees };
             }
             
             function renderChartWithData(chartData) {
@@ -556,7 +610,7 @@
                 if (!employees.labels || !employees.labels.length) { staffDiv.innerHTML = '<div>No staff sales data</div>'; }
                 else {
                     let h = '<table class="mini-table"><thead><tr><th>Staff</th><th>Sales (RM)</th></tr></thead><tbody>';
-                    for (let i = 0; i < employees.labels.length; i++) h += `<tr><td><strong>${escapeHtml(employees.labels[i])}</strong></td><td>${formatMYR(employees.data[i])}</td></tr>`;
+                    for (let i = 0; i < employees.labels.length; i++) h += `<tr><td><strong>${escapeHtml(employees.labels[i])}</strong></span></td><td>${formatMYR(employees.data[i])}</span></tr>`;
                     h += '</tbody></table>';
                     staffDiv.innerHTML = h;
                 }
@@ -568,7 +622,7 @@
                     products.products.forEach(p => { const c = p.category || 'Uncategorized'; rev.set(c, (rev.get(c) || 0) + p.total); qty.set(c, (qty.get(c) || 0) + (p.quantity || 0)); });
                     const sorted = Array.from(rev.entries()).sort((a,b) => b[1] - a[1]);
                     let h = '<table class="mini-table"><thead><tr><th>Category</th><th>Quantity Sold</th><th>Total Sales (RM)</th></tr></thead><tbody>';
-                    sorted.forEach(([c, amt]) => { h += `<tr><td><strong>${escapeHtml(c)}</strong></td><td>${formatNumber(qty.get(c))}</td><td>${formatMYR(amt)}</td></tr>`; });
+                    sorted.forEach(([c, amt]) => { h += `<tr><td><strong>${escapeHtml(c)}</strong></span></td><td>${formatNumber(qty.get(c))}</span></td><td>${formatMYR(amt)}</span></tr>`; });
                     h += '</tbody></table>';
                     catDiv.innerHTML = h;
                 }
@@ -578,7 +632,7 @@
                 else {
                     const allProducts = [...products.products].sort((a,b) => (b.total || 0) - (a.total || 0));
                     let h = '<table class="mini-table"><thead><tr><th>Product</th><th>Qty Sold</th><th>Revenue (RM)</th></tr></thead><tbody>';
-                    allProducts.forEach(p => { h += `<tr><td><strong>${escapeHtml(p.name || '')}</strong><br><span class="badge">${p.category || ''}</span></td><td>${formatNumber(p.quantity)}</span></td><td>${formatMYR(p.total)}</span></tr>`; });
+                    allProducts.forEach(p => { h += `<tr><td><strong>${escapeHtml(p.name || '')}</strong><br><span class="badge">${p.category || ''}</span></td><td>${formatNumber(p.quantity)}</td><td>${formatMYR(p.total)}</td></tr>`; });
                     h += '</tbody></table>';
                     prodDiv.innerHTML = h;
                 }
@@ -618,60 +672,106 @@
             function showError(msg) { errorDiv.innerText = msg; errorDiv.style.display = 'block'; setTimeout(() => errorDiv.style.display = 'none', 4000); }
             function escapeHtml(s) { if (!s) return ''; return s.replace(/[&<>]/g, m => m === '&' ? '&amp;' : m === '<' ? '&lt;' : '&gt;'); }
             
-            // ---------- Download Report Modal Functions (custom only) ----------
-            async function populateEmployeeDropdown() {
+            // ---------- Download Report Modal Functions ----------
+            function populateEmployeeDropdown() {
                 if (allEmployeesList.length === 0) {
-                    try {
-                        const data = await fetchApi('getEmployeeSalesData', currentStore, currentFrom, currentTo, null);
-                        if (data && data.labels) {
-                            allEmployeesList = data.labels.map((name, idx) => ({ id: idx, name: name }));
-                        }
-                    } catch(e) { console.warn(e); }
+                    reportEmployeeSelect.innerHTML = '<option value="all">👥 Loading employees...</option>';
+                    fetchAllEmployees().then(() => {
+                        reportEmployeeSelect.innerHTML = '<option value="all">👥 All Employees</option>';
+                        allEmployeesList.forEach(emp => {
+                            const opt = document.createElement('option');
+                            opt.value = emp.id;
+                            opt.textContent = emp.name;
+                            reportEmployeeSelect.appendChild(opt);
+                        });
+                    }).catch(() => {
+                        reportEmployeeSelect.innerHTML = '<option value="all">👥 All Employees</option>';
+                    });
+                } else {
+                    reportEmployeeSelect.innerHTML = '<option value="all">👥 All Employees</option>';
+                    allEmployeesList.forEach(emp => {
+                        const opt = document.createElement('option');
+                        opt.value = emp.id;
+                        opt.textContent = emp.name;
+                        reportEmployeeSelect.appendChild(opt);
+                    });
                 }
-                reportEmployeeSelect.innerHTML = '<option value="all">👥 All Employees</option>';
-                allEmployeesList.forEach(emp => {
-                    const opt = document.createElement('option');
-                    opt.value = emp.id;
-                    opt.textContent = emp.name;
-                    reportEmployeeSelect.appendChild(opt);
-                });
             }
+            
+            let currentReportPreset = null;
+            let reportFrom = '', reportTo = '';
             
             function openReportModal() {
                 populateEmployeeDropdown();
-                // Pre-fill custom date inputs with current dashboard range (or today if empty)
-                const fromInput = document.getElementById('reportFromDate');
-                const toInput = document.getElementById('reportToDate');
-                if (currentFrom) fromInput.value = currentFrom;
-                else fromInput.value = getTodayYMD();
-                if (currentTo) toInput.value = currentTo;
-                else toInput.value = getTodayYMD();
+                currentReportPreset = 'today';
+                const todayStr = getTodayYMD();
+                reportFrom = todayStr;
+                reportTo = todayStr;
                 reportModal.classList.add('active');
+                document.querySelectorAll('[data-report-preset]').forEach(btn => btn.style.backgroundColor = '');
+                const todayOption = document.querySelector('[data-report-preset="today"]');
+                if (todayOption) todayOption.style.backgroundColor = '#eef2ff';
+                document.getElementById('reportCustomRange').style.display = 'none';
             }
             
             function closeReportDownloadModal() {
                 reportModal.classList.remove('active');
             }
             
+            function setReportPreset(preset) {
+                currentReportPreset = preset;
+                const today = new Date();
+                if (preset === 'today') {
+                    const d = formatYMD(today);
+                    reportFrom = d;
+                    reportTo = d;
+                    document.getElementById('reportCustomRange').style.display = 'none';
+                } else if (preset === 'week') {
+                    let start = getWeekStart(today);
+                    let end = new Date(start);
+                    end.setDate(start.getDate() + 6);
+                    reportFrom = formatYMD(start);
+                    reportTo = formatYMD(end);
+                    document.getElementById('reportCustomRange').style.display = 'none';
+                } else if (preset === 'month') {
+                    let start = new Date(today.getFullYear(), today.getMonth(), 1);
+                    let end = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+                    reportFrom = formatYMD(start);
+                    reportTo = formatYMD(end);
+                    document.getElementById('reportCustomRange').style.display = 'none';
+                } else if (preset === 'year') {
+                    reportFrom = formatYMD(new Date(today.getFullYear(), 0, 1));
+                    reportTo = formatYMD(new Date(today.getFullYear(), 11, 31));
+                    document.getElementById('reportCustomRange').style.display = 'none';
+                } else if (preset === 'custom') {
+                    document.getElementById('reportCustomRange').style.display = 'block';
+                }
+                document.querySelectorAll('[data-report-preset]').forEach(btn => btn.style.backgroundColor = '');
+                const selected = document.querySelector(`[data-report-preset="${preset}"]`);
+                if (selected) selected.style.backgroundColor = '#eef2ff';
+            }
+            
             async function generateCSVReport() {
-                const fromInput = document.getElementById('reportFromDate').value;
-                const toInput = document.getElementById('reportToDate').value;
-                if (!fromInput || !toInput) {
-                    showError('Please select both start and end dates.');
-                    return;
+                if (currentReportPreset === 'custom') {
+                    const fromInput = document.getElementById('reportFromDate').value;
+                    const toInput = document.getElementById('reportToDate').value;
+                    if (!fromInput || !toInput) {
+                        showError('Please select both dates for custom range');
+                        return;
+                    }
+                    if (fromInput > toInput) { showError('Invalid date range'); return; }
+                    if (isFutureDate(fromInput)) { showError('Start date cannot be in the future'); return; }
+                    reportFrom = fromInput;
+                    reportTo = toInput;
                 }
-                if (fromInput > toInput) {
-                    showError('Start date cannot be after end date.');
-                    return;
-                }
-                if (isFutureDate(fromInput)) {
-                    showError('Start date cannot be in the future.');
-                    return;
-                }
-                const reportFrom = fromInput;
-                const reportTo = toInput;
+                if (!reportFrom || !reportTo) { showError('Invalid date range'); return; }
+                
                 const employeeId = reportEmployeeSelect.value;
-                const employeeName = employeeId === 'all' ? 'All Employees' : reportEmployeeSelect.options[reportEmployeeSelect.selectedIndex]?.text || 'Selected';
+                let employeeName = null;
+                if (employeeId !== 'all') {
+                    const selectedEmp = allEmployeesList.find(emp => emp.id == employeeId);
+                    employeeName = selectedEmp ? selectedEmp.name : null;
+                }
                 
                 showError('');
                 const loadingMsg = document.createElement('div');
@@ -682,15 +782,15 @@
                 document.body.appendChild(loadingMsg);
                 
                 try {
-                    let url = `${RECEIPTS_BACKEND_URL}?action=getReceipts&store=${currentStore}&from=${reportFrom}&to=${reportTo}&employeeId=all`;
+                    const reportStore = 'all';
+                    let url = `${POS_BACKEND_URL}?action=getReceipts&store=${reportStore}&from=${reportFrom}&to=${reportTo}&employeeId=all`;
                     const response = await fetch(url);
                     const result = await response.json();
                     if (!result.success || !result.receipts) throw new Error('Failed to fetch receipt data: ' + (result.error || 'No receipts'));
                     
                     let receipts = result.receipts;
-                    if (employeeId !== 'all') {
-                        const selectedEmpName = reportEmployeeSelect.options[reportEmployeeSelect.selectedIndex]?.text;
-                        receipts = receipts.filter(r => r.sales_person_name === selectedEmpName || r.employee_name === selectedEmpName);
+                    if (employeeName) {
+                        receipts = receipts.filter(r => r.sales_person_name === employeeName || r.employee_name === employeeName);
                     }
                     
                     if (receipts.length === 0) {
@@ -699,7 +799,7 @@
                         return;
                     }
                     
-                    const dailyMap = new Map(); // key "employeeName|date"
+                    const dailyMap = new Map();
                     for (const rec of receipts) {
                         const emp = rec.sales_person_name || rec.employee_name || 'Unknown';
                         const date = rec.timestamp ? rec.timestamp.split('T')[0] : 'Unknown';
@@ -729,7 +829,8 @@
                     const link = document.createElement('a');
                     const urlFile = URL.createObjectURL(blob);
                     link.href = urlFile;
-                    link.setAttribute('download', `sales_report_${currentStore}_${reportFrom}_to_${reportTo}_${employeeName.replace(/\s/g, '_')}.csv`);
+                    const displayEmployee = employeeName ? employeeName.replace(/\s/g, '_') : 'All_Employees';
+                    link.setAttribute('download', `sales_report_all_stores_${reportFrom}_to_${reportTo}_${displayEmployee}.csv`);
                     document.body.appendChild(link);
                     link.click();
                     document.body.removeChild(link);
@@ -743,10 +844,15 @@
                 }
             }
             
-            // Event handlers for report modal
             downloadReportBtn.addEventListener('click', openReportModal);
             closeReportModalBtn.addEventListener('click', closeReportDownloadModal);
             generateReportBtn.addEventListener('click', generateCSVReport);
+            document.querySelectorAll('[data-report-preset]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const preset = btn.getAttribute('data-report-preset');
+                    setReportPreset(preset);
+                });
+            });
             reportModal.addEventListener('click', (e) => { if (e.target === reportModal) closeReportDownloadModal(); });
             
             // Existing modal logic
@@ -791,7 +897,8 @@
                 else if (trendChart && trendChart.data) renderChartWithData({ salesByDay: { labels: trendChart.data.labels, data: trendChart.data.datasets[0].data } });
             }));
             
-            // Initial load: today
+            fetchAllEmployees();
+            
             const todayNow = new Date();
             currentPresetType = 'day';
             currentDayDate = new Date(todayNow);
