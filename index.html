@@ -158,8 +158,8 @@
     </div>
     <div class="section-card"><div class="section-title">💵 Payment Breakdown</div><div class="payment-breakdown"><div class="payment-item"><div class="payment-method">Cash</div><div class="payment-amount" id="cashAmount">—</div></div><div class="payment-item"><div class="payment-method">Card</div><div class="payment-amount" id="cardAmount">—</div></div><div class="payment-item"><div class="payment-method">Alipay</div><div class="payment-amount" id="alipayAmount">—</div></div><div class="payment-item"><div class="payment-method">TnG</div><div class="payment-amount" id="otherAmount">—</div></div><div class="payment-item"><div class="payment-method">Refunds</div><div class="payment-amount" id="refundAmount">—</div></div></div></div>
     <div class="section-card"><div class="chart-header"><div class="section-title" style="margin-bottom:0; border-left: none;">📈 Sales Trend</div><div class="toggle-group" id="chartToggleGroup"><button class="toggle-btn active" data-chart-type="line">Line</button><button class="toggle-btn" data-chart-type="bar">Bar</button></div></div><canvas id="trendChart"></canvas></div>
-    <div class="section-card"><div class="section-title">🏆 Top Products (net positive sales only)</div><div id="productsList" class="product-table-container">Loading...</div><div class="note">* Only products with total revenue > RM 0 after all discounts and refunds are shown.</div></div>
-    <div class="section-card"><div class="section-title">📊 Sales by Category (net positive only)</div><div id="categorySalesList">Loading...</div><div class="note">* Categories include only products with net positive revenue.</div></div>
+    <div class="section-card"><div class="section-title">🏆 Top Products (refunded products removed)</div><div id="productsList" class="product-table-container">Loading...</div><div class="note">* Amounts shown after all discounts. Products involved in any refund are excluded.</div></div>
+    <div class="section-card"><div class="section-title">📊 Sales by Category (refunded items excluded)</div><div id="categorySalesList">Loading...</div><div class="note">* Category totals only include products that have not been refunded.</div></div>
 </div>
 
 <!-- Store Modal -->
@@ -238,6 +238,7 @@
             let initialPreloadDone = false;
             let currentChartType = "line";
             let allEmployeesList = [];
+            let refundedProductsCache = { key: "", productNamesSet: null };
             
             // Helper: get today's YYYY-MM-DD in local time
             function getTodayYMD() {
@@ -337,7 +338,7 @@
                 rightArrowBtn.disabled = isFutureDate(nextRange.from);
             }
             
-            async function silentPreload(store, from, to) { /* kept for performance, no changes */ }
+            async function silentPreload(store, from, to) { /* no changes, kept minimal */ }
             function triggerAdjacentPreload() { if (preloadTimer) clearTimeout(preloadTimer); if (currentPresetType === 'custom') return; preloadTimer = setTimeout(() => { const nr = getAdjacentRange('next'); const pr = getAdjacentRange('prev'); if (nr && !isFutureDate(nr.from)) silentPreload(currentStore, nr.from, nr.to); if (pr) silentPreload(currentStore, pr.from, pr.to); }, PRELOAD_DELAY); }
             function preloadCommonPresets() { if (initialPreloadDone) return; initialPreloadDone = true; const t = new Date(); const todayStr = formatYMD(t); const ws = getWeekStart(t), we = new Date(ws); we.setDate(ws.getDate() + 6); const ms = new Date(t.getFullYear(), t.getMonth(), 1), me = new Date(t.getFullYear(), t.getMonth() + 1, 0); setTimeout(() => { silentPreload(currentStore, todayStr, todayStr); silentPreload(currentStore, formatYMD(ws), formatYMD(we)); silentPreload(currentStore, formatYMD(ms), formatYMD(me)); }, 1000); }
             
@@ -429,48 +430,87 @@
                 } catch (err) { allEmployeesList = []; }
             }
             
-            // ----- RENDER PRODUCTS: only keep products with total > 0 (net positive after refunds) -----
-            function renderProductList(productsArray) {
+            // ---------- REFUND DETECTION : returns Set of product names that were refunded ----------
+            async function fetchRefundedProductNames(store, from, to) {
+                const cacheKey = `${store}|${from}|${to}`;
+                if (refundedProductsCache.key === cacheKey && refundedProductsCache.productNamesSet) {
+                    return refundedProductsCache.productNamesSet;
+                }
+                try {
+                    const url = `${POS_BACKEND_URL}?action=getReceipts&store=${store}&from=${from}&to=${to}&employeeId=all`;
+                    const response = await fetch(url);
+                    const result = await response.json();
+                    if (!result.success || !result.receipts) return new Set();
+                    const refundedNames = new Set();
+                    for (const receipt of result.receipts) {
+                        const isRefundReceipt = receipt.total < 0 || receipt.is_refund === true || (receipt.type && receipt.type.toLowerCase() === 'refund');
+                        if (!isRefundReceipt && (!receipt.items || receipt.items.length === 0)) continue;
+                        if (receipt.items && receipt.items.length) {
+                            for (const item of receipt.items) {
+                                const itemName = item.item_name || item.name;
+                                if (!itemName) continue;
+                                const hasNegativeQty = item.quantity < 0;
+                                if (isRefundReceipt || hasNegativeQty || item.total < 0) {
+                                    refundedNames.add(itemName.trim());
+                                }
+                            }
+                        } else if (isRefundReceipt && receipt.item_name) {
+                            refundedNames.add(receipt.item_name.trim());
+                        }
+                    }
+                    refundedProductsCache = { key: cacheKey, productNamesSet: refundedNames };
+                    return refundedNames;
+                } catch (err) {
+                    console.warn("Refund detection failed, products/category will not filter refunds", err);
+                    return new Set();
+                }
+            }
+            
+            function renderProductList(productsArray, refundedNameSet) {
                 if (!productsArray || productsArray.length === 0) {
                     productsContainer.innerHTML = '<div>No product sales data available</div>';
                     return;
                 }
-                // Filter out products with total <= 0 (refunded fully or negative)
-                const filtered = productsArray.filter(p => (p.total || 0) > 0);
+                let filtered = productsArray;
+                if (refundedNameSet.size) {
+                    filtered = productsArray.filter(p => !refundedNameSet.has((p.name || '').trim()));
+                }
                 if (filtered.length === 0) {
-                    productsContainer.innerHTML = '<div>✅ No products with net positive sales in this period.</div>';
+                    productsContainer.innerHTML = '<div>✅ No products found (all items were refunded).</div>';
                     return;
                 }
                 const sorted = [...filtered].sort((a,b) => (b.total || 0) - (a.total || 0));
                 let h = '<table class="mini-table"><thead><tr><th>Product</th><th>Qty Sold</th><th>Revenue (RM)</th></tr></thead><tbody>';
                 sorted.forEach(p => {
-                    h += `<tr><td><strong>${escapeHtml(p.name || '')}</strong><br><span class="badge">${escapeHtml(p.category || '')}</span></td><td>${formatNumber(p.quantity)}</span></td><td>${formatMYR(p.total)}</span></tr>`;
+                    h += `<tr><td><strong>${escapeHtml(p.name || '')}</strong><br><span class="badge">${escapeHtml(p.category || '')}</span></td><td>${formatNumber(p.quantity)}</td><td>${formatMYR(p.total)}</td></tr>`;
                 });
                 h += '</tbody></table>';
                 productsContainer.innerHTML = h;
             }
             
-            function renderCategoryList(productsArray) {
+            function renderCategoryList(productsArray, refundedNameSet) {
                 if (!productsArray || productsArray.length === 0) {
                     categoryContainer.innerHTML = '<div>No category data</div>';
                     return;
                 }
                 const rev = new Map(), qty = new Map();
                 for (const p of productsArray) {
-                    const total = p.total || 0;
-                    if (total <= 0) continue; // skip products with net zero/negative revenue
+                    const productName = (p.name || '').trim();
+                    if (refundedNameSet.size && refundedNameSet.has(productName)) continue; // skip refunded product
                     const cat = p.category || 'Uncategorized';
+                    const total = p.total || 0;
+                    const quantity = p.quantity || 0;
                     rev.set(cat, (rev.get(cat) || 0) + total);
-                    qty.set(cat, (qty.get(cat) || 0) + (p.quantity || 0));
+                    qty.set(cat, (qty.get(cat) || 0) + quantity);
                 }
                 if (rev.size === 0) {
-                    categoryContainer.innerHTML = '<div>No categories with net positive sales</div>';
+                    categoryContainer.innerHTML = '<div>No categories after refund exclusion</div>';
                     return;
                 }
                 const sorted = Array.from(rev.entries()).sort((a,b) => b[1] - a[1]);
                 let h = '<table class="mini-table"><thead><tr><th>Category</th><th>Quantity Sold</th><th>Total Sales (RM)</th></tr></thead><tbody>';
                 sorted.forEach(([cat, amt]) => {
-                    h += `<tr><td><strong>${escapeHtml(cat)}</strong></td><td>${formatNumber(qty.get(cat))}</td><td>${formatMYR(amt)}</span></tr>`;
+                    h += `<tr><td><strong>${escapeHtml(cat)}</strong></td><td>${formatNumber(qty.get(cat))}</td><td>${formatMYR(amt)}</td></tr>`;
                 });
                 h += '</tbody></table>';
                 categoryContainer.innerHTML = h;
@@ -521,10 +561,13 @@
                 renderChartWithData(chart);
                 hasData = true;
                 
-                // Render product & category using net positive filtering (no separate refund API)
+                // Apply refund filtering to both TOP PRODUCTS and CATEGORY SALES
+                productsContainer.innerHTML = '<div class="product-loading-note">🔄 Checking refunds, updating product & category lists...</div>';
+                categoryContainer.innerHTML = '<div class="product-loading-note">🔄 Filtering refunded items...</div>';
+                const refundedNames = await fetchRefundedProductNames(currentStore, currentFrom, currentTo);
                 if (products.products && products.products.length) {
-                    renderProductList(products.products);
-                    renderCategoryList(products.products);
+                    renderProductList(products.products, refundedNames);
+                    renderCategoryList(products.products, refundedNames);
                 } else {
                     renderProductList([]);
                     renderCategoryList([]);
@@ -562,7 +605,7 @@
             function showError(msg) { errorDiv.innerText = msg; errorDiv.style.display = 'block'; setTimeout(() => errorDiv.style.display = 'none', 4000); }
             function escapeHtml(s) { if (!s) return ''; return s.replace(/[&<>]/g, m => m === '&' ? '&amp;' : m === '<' ? '&lt;' : '&gt;'); }
             
-            // ---------- CSV report generation (unchanged) ----------
+            // ---------- CSV report generation (unchanged logic) ----------
             function populateEmployeeDropdown() {
                 if (allEmployeesList.length === 0) {
                     reportEmployeeSelect.innerHTML = '<option value="all">👥 Loading employees...</option>';
