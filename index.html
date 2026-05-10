@@ -1043,7 +1043,7 @@
     }
 }
             
-           function buildIrsReceiptsHtml(receipts, storeName, fromDate, toDate, employeeFilter, grandTotal) {
+          function buildIrsReceiptsHtml(receipts, storeName, fromDate, toDate, employeeFilter, grandTotal) {
     return `<!DOCTYPE html>
     <html>
     <head><meta charset="UTF-8"><title>IRS_Report_${fromDate}_to_${toDate}</title>
@@ -1090,10 +1090,10 @@
                 <div><strong>💰 Total (RM)</strong><br><span style="font-weight:800;">${Math.abs(rec.total).toFixed(2)}</span></div>
             </div>
             ${itemsList.length ? `<table class="items-table"><thead><tr><th>Item</th><th>Qty</th><th>Unit Price (RM)</th><th>Subtotal (RM)</th></tr></thead><tbody>
-            ${itemsList.map(it => `<tr><td>${escapeHtml(it.item_name || it.name || 'Item')}</td><td>${it.quantity || 0}</td><td>${(it.price || 0).toFixed(2)}</td><td class="${it.total < 0 ? 'refund-total' : ''}">${(it.total || 0).toFixed(2)}</td></tr>`).join('')}
+            ${itemsList.map(it => `<tr><tr>${escapeHtml(it.item_name || it.name || 'Item')}</td><td>${it.quantity || 0}</td><td>${(it.price || 0).toFixed(2)}</td><td class="${it.total < 0 ? 'refund-total' : ''}">${(it.total || 0).toFixed(2)}</td></tr>`).join('')}
             </tbody></table>` : '<div style="padding:8px; background:#fef5e7;">No line items recorded</div>'}
             <div class="total-line ${isRefund ? 'refund-total' : ''}">
-                ${isRefund ? 'Refund Total: RM ' : 'Total: RM '}${Math.abs(rec.total).toFixed(2)}
+                ${isRefund ? `Refund Total: - RM ${Math.abs(rec.total).toFixed(2)}` : `Total: RM ${rec.total.toFixed(2)}`}
             </div>
         </div>`}).join('')}
     <div class="grand-total">🏁 GRAND TOTAL: RM ${grandTotal.toFixed(2)}</div>
