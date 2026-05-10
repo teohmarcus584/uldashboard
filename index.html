@@ -249,7 +249,7 @@
     </div>
 </div>
 
-<!-- NEW: IRS Receipts Modal -->
+<!-- NEW: IRS Receipts Modal (with Last Year preset) -->
 <div id="irsReceiptModal" class="modal-overlay">
     <div class="modal-bottom">
         <div class="modal-title">🏦 IRS Reporting Receipts</div>
@@ -257,6 +257,7 @@
         <div class="preset-option" data-irs-preset="week">This Week</div>
         <div class="preset-option" data-irs-preset="month">This Month</div>
         <div class="preset-option" data-irs-preset="year">This Year</div>
+        <div class="preset-option" data-irs-preset="lastyear">📆 Last Year</div>   <!-- NEW -->
         <div class="divider"></div>
         <div class="preset-option" data-irs-preset="custom">📆 Custom Range</div>
         <div id="irsCustomRange" style="display: none;">
@@ -928,35 +929,82 @@
                 allEmployeesList.forEach(emp => { const opt = document.createElement('option'); opt.value = emp.id; opt.textContent = emp.name; irsEmployeeSelect.appendChild(opt); });
             }
             
-            function setIrsPreset(preset, customFrom, customTo) {
-                const today = new Date();
-                if (preset === 'custom' && customFrom && customTo) {
-                    irsFromDate = customFrom;
-                    irsToDate = customTo;
-                    currentIrsPreset = 'custom';
-                    return;
-                }
-                if (preset === 'today') { const d = getTodayYMD(); irsFromDate = d; irsToDate = d; currentIrsPreset = 'today'; }
-                else if (preset === 'week') { let start = getWeekStart(today); let end = new Date(start); end.setDate(start.getDate()+6); irsFromDate = formatYMD(start); irsToDate = formatYMD(end); currentIrsPreset = 'week'; }
-                else if (preset === 'month') { let start = new Date(today.getFullYear(), today.getMonth(), 1); let end = new Date(today.getFullYear(), today.getMonth()+1, 0); irsFromDate = formatYMD(start); irsToDate = formatYMD(end); currentIrsPreset = 'month'; }
-                else if (preset === 'year') { irsFromDate = formatYMD(new Date(today.getFullYear(),0,1)); irsToDate = formatYMD(new Date(today.getFullYear(),11,31)); currentIrsPreset = 'year'; }
-                document.querySelectorAll('[data-irs-preset]').forEach(btn => btn.style.backgroundColor = '');
-                const selected = document.querySelector(`[data-irs-preset="${preset}"]`);
-                if(selected) selected.style.backgroundColor = '#eef2ff';
-                if(preset !== 'custom') document.getElementById('irsCustomRange').style.display = 'none';
-                else document.getElementById('irsCustomRange').style.display = 'block';
-            }
+           function setIrsPreset(preset, customFrom, customTo) {
+    const today = new Date();
+    if (preset === 'custom' && customFrom && customTo) {
+        irsFromDate = customFrom;
+        irsToDate = customTo;
+        currentIrsPreset = 'custom';
+        return;
+    }
+    if (preset === 'today') { 
+        const d = getTodayYMD(); 
+        irsFromDate = d; 
+        irsToDate = d; 
+        currentIrsPreset = 'today'; 
+    }
+    else if (preset === 'week') { 
+        let start = getWeekStart(today); 
+        let end = new Date(start); 
+        end.setDate(start.getDate()+6); 
+        irsFromDate = formatYMD(start); 
+        irsToDate = formatYMD(end); 
+        currentIrsPreset = 'week'; 
+    }
+    else if (preset === 'month') { 
+        let start = new Date(today.getFullYear(), today.getMonth(), 1); 
+        let end = new Date(today.getFullYear(), today.getMonth()+1, 0); 
+        irsFromDate = formatYMD(start); 
+        irsToDate = formatYMD(end); 
+        currentIrsPreset = 'month'; 
+    }
+    else if (preset === 'year') { 
+        irsFromDate = formatYMD(new Date(today.getFullYear(),0,1)); 
+        irsToDate = formatYMD(new Date(today.getFullYear(),11,31)); 
+        currentIrsPreset = 'year'; 
+    }
+    else if (preset === 'lastyear') {   // NEW
+        const lastYear = today.getFullYear() - 1;
+        irsFromDate = formatYMD(new Date(lastYear, 0, 1));
+        irsToDate = formatYMD(new Date(lastYear, 11, 31));
+        currentIrsPreset = 'lastyear';
+    }
+    
+    // Highlight selected preset
+    document.querySelectorAll('[data-irs-preset]').forEach(btn => btn.style.backgroundColor = '');
+    const selected = document.querySelector(`[data-irs-preset="${preset}"]`);
+    if(selected) selected.style.backgroundColor = '#eef2ff';
+    
+    // Hide/show custom range div
+    if(preset !== 'custom') {
+        document.getElementById('irsCustomRange').style.display = 'none';
+    } else {
+        document.getElementById('irsCustomRange').style.display = 'block';
+        // Optionally pre-populate custom inputs with current irsFromDate/irsToDate
+        document.getElementById('irsFromDate').value = irsFromDate;
+        document.getElementById('irsToDate').value = irsToDate;
+    }
+}
             
             async function generateIrsReceiptPDF() {
-    if (currentIrsPreset === 'custom') {
+    // Always read custom inputs if the custom div is visible, even if preset not set to 'custom'
+    const customDiv = document.getElementById('irsCustomRange');
+    if (customDiv && customDiv.style.display === 'block') {
         const fromInput = document.getElementById('irsFromDate').value;
         const toInput = document.getElementById('irsToDate').value;
-        if (!fromInput || !toInput) { showError("Please select custom date range"); return; }
-        if (fromInput > toInput) { showError("Invalid date range"); return; }
-        irsFromDate = fromInput;
-        irsToDate = toInput;
+        if (fromInput && toInput) {
+            irsFromDate = fromInput;
+            irsToDate = toInput;
+            currentIrsPreset = 'custom';
+        }
     }
-    if (!irsFromDate || !irsToDate) { showError("Date range missing"); return; }
+    
+    // If still no dates, fallback to preset (including 'lastyear')
+    if (!irsFromDate || !irsToDate) {
+        showError("Please select a valid date range");
+        return;
+    }
+    
     const selectedStore = currentIrsStore;
     const selectedEmployeeId = irsEmployeeSelect.value;
     let selectedEmployeeName = null;
@@ -980,9 +1028,7 @@
         if (receipts.length === 0) throw new Error("No IRS receipts found for given criteria");
         receipts.sort((a,b) => (a.timestamp || '').localeCompare(b.timestamp || ''));
         
-        // Calculate grand total
         const grandTotal = receipts.reduce((sum, rec) => sum + (rec.total || 0), 0);
-        
         const storeDisplayName = selectedStore === 'all' ? 'ALL STORES' : currentIrsStoreName;
         const htmlContent = buildIrsReceiptsHtml(receipts, storeDisplayName, irsFromDate, irsToDate, selectedEmployeeName, grandTotal);
         const printWindow = window.open('', '_blank');
