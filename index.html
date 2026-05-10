@@ -948,99 +948,104 @@
             }
             
             async function generateIrsReceiptPDF() {
-                if (currentIrsPreset === 'custom') {
-                    const fromInput = document.getElementById('irsFromDate').value;
-                    const toInput = document.getElementById('irsToDate').value;
-                    if (!fromInput || !toInput) { showError("Please select custom date range"); return; }
-                    if (fromInput > toInput) { showError("Invalid date range"); return; }
-                    irsFromDate = fromInput;
-                    irsToDate = toInput;
-                }
-                if (!irsFromDate || !irsToDate) { showError("Date range missing"); return; }
-                const selectedStore = currentIrsStore;
-                const selectedEmployeeId = irsEmployeeSelect.value;
-                let selectedEmployeeName = null;
-                if (selectedEmployeeId !== 'all') {
-                    const emp = allEmployeesList.find(e => e.id == selectedEmployeeId);
-                    selectedEmployeeName = emp ? emp.name : null;
-                }
-                const loadingDiv = document.createElement('div');
-                loadingDiv.className = 'loading-toast';
-                loadingDiv.innerText = `Fetching IRS receipts ${irsFromDate} → ${irsToDate} ...`;
-                document.body.appendChild(loadingDiv);
-                try {
-                    const url = `${POS_BACKEND_URL}?action=getIrsReceipts&store=${selectedStore}&from=${irsFromDate}&to=${irsToDate}&employeeId=${selectedEmployeeId === 'all' ? 'all' : selectedEmployeeId}`;
-                    const response = await fetch(url);
-                    const result = await response.json();
-                    if (!result.success || !result.receipts) throw new Error("No IRS receipt data");
-                    let receipts = result.receipts;
-                    if (selectedEmployeeName) {
-                        receipts = receipts.filter(r => r.employee_name === selectedEmployeeName);
-                    }
-                    if (receipts.length === 0) throw new Error("No IRS receipts found for given criteria");
-                    receipts.sort((a,b) => (a.timestamp || '').localeCompare(b.timestamp || ''));
-                    const storeDisplayName = selectedStore === 'all' ? 'ALL STORES' : currentIrsStoreName;
-                    const htmlContent = buildIrsReceiptsHtml(receipts, storeDisplayName, irsFromDate, irsToDate, selectedEmployeeName);
-                    const printWindow = window.open('', '_blank');
-                    printWindow.document.write(htmlContent);
-                    printWindow.document.close();
-                    printWindow.focus();
-                    printWindow.print();
-                } catch(err) {
-                    showError("IRS PDF failed: " + err.message);
-                } finally {
-                    loadingDiv.remove();
-                }
-            }
+    if (currentIrsPreset === 'custom') {
+        const fromInput = document.getElementById('irsFromDate').value;
+        const toInput = document.getElementById('irsToDate').value;
+        if (!fromInput || !toInput) { showError("Please select custom date range"); return; }
+        if (fromInput > toInput) { showError("Invalid date range"); return; }
+        irsFromDate = fromInput;
+        irsToDate = toInput;
+    }
+    if (!irsFromDate || !irsToDate) { showError("Date range missing"); return; }
+    const selectedStore = currentIrsStore;
+    const selectedEmployeeId = irsEmployeeSelect.value;
+    let selectedEmployeeName = null;
+    if (selectedEmployeeId !== 'all') {
+        const emp = allEmployeesList.find(e => e.id == selectedEmployeeId);
+        selectedEmployeeName = emp ? emp.name : null;
+    }
+    const loadingDiv = document.createElement('div');
+    loadingDiv.className = 'loading-toast';
+    loadingDiv.innerText = `Fetching IRS receipts ${irsFromDate} → ${irsToDate} ...`;
+    document.body.appendChild(loadingDiv);
+    try {
+        const url = `${POS_BACKEND_URL}?action=getIrsReceipts&store=${selectedStore}&from=${irsFromDate}&to=${irsToDate}&employeeId=${selectedEmployeeId === 'all' ? 'all' : selectedEmployeeId}`;
+        const response = await fetch(url);
+        const result = await response.json();
+        if (!result.success || !result.receipts) throw new Error("No IRS receipt data");
+        let receipts = result.receipts;
+        if (selectedEmployeeName) {
+            receipts = receipts.filter(r => r.employee_name === selectedEmployeeName);
+        }
+        if (receipts.length === 0) throw new Error("No IRS receipts found for given criteria");
+        receipts.sort((a,b) => (a.timestamp || '').localeCompare(b.timestamp || ''));
+        
+        // Calculate grand total
+        const grandTotal = receipts.reduce((sum, rec) => sum + (rec.total || 0), 0);
+        
+        const storeDisplayName = selectedStore === 'all' ? 'ALL STORES' : currentIrsStoreName;
+        const htmlContent = buildIrsReceiptsHtml(receipts, storeDisplayName, irsFromDate, irsToDate, selectedEmployeeName, grandTotal);
+        const printWindow = window.open('', '_blank');
+        printWindow.document.write(htmlContent);
+        printWindow.document.close();
+        printWindow.focus();
+        printWindow.print();
+    } catch(err) {
+        showError("IRS PDF failed: " + err.message);
+    } finally {
+        loadingDiv.remove();
+    }
+}
             
-            function buildIrsReceiptsHtml(receipts, storeName, fromDate, toDate, employeeFilter) {
-                return `<!DOCTYPE html>
-                <html>
-                <head><meta charset="UTF-8"><title>IRS_Report_${fromDate}_to_${toDate}</title>
-                <style>
-                    body { font-family: 'Inter', 'Segoe UI', sans-serif; margin: 20px; background: white; }
-                    .print-header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #2b6e9e; padding-bottom: 12px; }
-                    .store-title { font-size: 28px; font-weight: 800; }
-                    .range-info { color: #2d3748; margin-top: 6px; }
-                    .employee-note { background: #f0f4f8; display: inline-block; padding: 4px 12px; border-radius: 40px; font-size: 12px; margin-top: 8px; }
-                    .receipt-block { page-break-inside: avoid; margin-bottom: 32px; border: 1px solid #e2e8f0; border-radius: 20px; padding: 16px; background: #ffffff; break-inside: avoid; }
-                    .receipt-title { font-weight: 800; font-size: 18px; border-left: 5px solid #e67e22; padding-left: 12px; margin-bottom: 12px; }
-                    .receipt-meta { display: flex; flex-wrap: wrap; gap: 18px; background: #f9fbfd; padding: 12px; border-radius: 16px; margin-bottom: 16px; font-size: 13px; }
-                    .receipt-meta strong { min-width: 100px; display: inline-block; }
-                    .items-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 12px; }
-                    .items-table th, .items-table td { border: 1px solid #cbd5e0; padding: 8px; text-align: left; }
-                    .items-table th { background: #edf2f7; }
-                    .total-line { text-align: right; margin-top: 12px; font-weight: 800; font-size: 16px; }
-                </style>
-                </head>
-                <body>
-                <div class="print-header">
-                    <div class="store-title">🏦 IRS REPORTING RECEIPTS</div>
-                    <div class="store-title" style="font-size:18px;">${escapeHtml(storeName)}</div>
-                    <div class="range-info">Period: ${escapeHtml(fromDate)} → ${escapeHtml(toDate)}</div>
-                    ${employeeFilter ? `<div class="employee-note">👤 Employee: ${escapeHtml(employeeFilter)}</div>` : ''}
-                    <div style="margin-top:8px; font-size:12px;">Generated on ${new Date().toLocaleString()}</div>
-                </div>
-                ${receipts.map((rec, idx) => {
-                    const receiptId = rec.transaction_id || rec.id || `IRS-${idx}`;
-                    const dateTime = rec.timestamp ? new Date(rec.timestamp).toLocaleString() : 'N/A';
-                    const employee = rec.employee_name || '—';
-                    const itemsList = rec.items && rec.items.length ? rec.items : (rec.item_name ? [{ item_name: rec.item_name, quantity: rec.quantity || 1, total: rec.total, price: rec.price }] : []);
-                    return `<div class="receipt-block">
-                        <div class="receipt-title">Invoice #${escapeHtml(rec.invoice_no)} (TX: ${escapeHtml(receiptId)})</div>
-                        <div class="receipt-meta">
-                            <div><strong>📅 Date/Time</strong><br>${escapeHtml(dateTime)}</div>
-                            <div><strong>👤 Employee</strong><br>${escapeHtml(employee)}</div>
-                            <div><strong>💰 Total (RM)</strong><br><span style="font-weight:800;">${(rec.total || 0).toFixed(2)}</span></div>
-                        </div>
-                        ${itemsList.length ? `<table class="items-table"><thead><tr><th>Item</th><th>Qty</th><th>Unit Price (RM)</th><th>Subtotal (RM)</th></tr></thead><tbody>
-                        ${itemsList.map(it => `<tr><td>${escapeHtml(it.item_name || it.name || 'Item')}</td><td>${it.quantity || 0}</td><td>${(it.price || 0).toFixed(2)}</td><td>${(it.total || 0).toFixed(2)}</td>`).join('')}
-                        </tbody></table>` : '<div style="padding:8px; background:#fef5e7;">No line items recorded</div>'}
-                        <div class="total-line">Total: RM ${(rec.total || 0).toFixed(2)}</div>
-                    </div>`}).join('')}
-                <div style="text-align:center; margin-top: 40px; font-size: 10px; color: gray;">End of IRS Report — ${receipts.length} transactions</div>
-                </body></html>`;
-            }
+            function buildIrsReceiptsHtml(receipts, storeName, fromDate, toDate, employeeFilter, grandTotal) {
+    return `<!DOCTYPE html>
+    <html>
+    <head><meta charset="UTF-8"><title>IRS_Report_${fromDate}_to_${toDate}</title>
+    <style>
+        body { font-family: 'Inter', 'Segoe UI', sans-serif; margin: 20px; background: white; }
+        .print-header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #2b6e9e; padding-bottom: 12px; }
+        .store-title { font-size: 28px; font-weight: 800; }
+        .range-info { color: #2d3748; margin-top: 6px; }
+        .employee-note { background: #f0f4f8; display: inline-block; padding: 4px 12px; border-radius: 40px; font-size: 12px; margin-top: 8px; }
+        .receipt-block { page-break-inside: avoid; margin-bottom: 32px; border: 1px solid #e2e8f0; border-radius: 20px; padding: 16px; background: #ffffff; break-inside: avoid; }
+        .receipt-title { font-weight: 800; font-size: 18px; border-left: 5px solid #e67e22; padding-left: 12px; margin-bottom: 12px; }
+        .receipt-meta { display: flex; flex-wrap: wrap; gap: 18px; background: #f9fbfd; padding: 12px; border-radius: 16px; margin-bottom: 16px; font-size: 13px; }
+        .receipt-meta strong { min-width: 100px; display: inline-block; }
+        .items-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 12px; }
+        .items-table th, .items-table td { border: 1px solid #cbd5e0; padding: 8px; text-align: left; }
+        .items-table th { background: #edf2f7; }
+        .total-line { text-align: right; margin-top: 12px; font-weight: 800; font-size: 16px; }
+        .grand-total { margin-top: 30px; padding-top: 12px; border-top: 2px solid #e67e22; text-align: right; font-size: 18px; font-weight: 800; }
+    </style>
+    </head>
+    <body>
+    <div class="print-header">
+        <div class="store-title">🏦 IRS REPORTING RECEIPTS</div>
+        <div class="store-title" style="font-size:18px;">${escapeHtml(storeName)}</div>
+        <div class="range-info">Period: ${escapeHtml(fromDate)} → ${escapeHtml(toDate)}</div>
+        ${employeeFilter ? `<div class="employee-note">👤 Employee: ${escapeHtml(employeeFilter)}</div>` : ''}
+        <div style="margin-top:8px; font-size:12px;">Generated on ${new Date().toLocaleString()}</div>
+    </div>
+    ${receipts.map((rec, idx) => {
+        const dateTime = rec.timestamp ? new Date(rec.timestamp).toLocaleString() : 'N/A';
+        const employee = rec.employee_name || '—';
+        const itemsList = rec.items && rec.items.length ? rec.items : (rec.item_name ? [{ item_name: rec.item_name, quantity: rec.quantity || 1, total: rec.total, price: rec.price }] : []);
+        return `<div class="receipt-block">
+            <div class="receipt-title">Invoice #${escapeHtml(rec.invoice_no)}</div>
+            <div class="receipt-meta">
+                <div><strong>📅 Date/Time</strong><br>${escapeHtml(dateTime)}</div>
+                <div><strong>👤 Employee</strong><br>${escapeHtml(employee)}</div>
+                <div><strong>💰 Total (RM)</strong><br><span style="font-weight:800;">${(rec.total || 0).toFixed(2)}</span></div>
+            </div>
+            ${itemsList.length ? `<table class="items-table"><thead><tr><th>Item</th><th>Qty</th><th>Unit Price (RM)</th><th>Subtotal (RM)</th></tr></thead><tbody>
+            ${itemsList.map(it => `<tr><td>${escapeHtml(it.item_name || it.name || 'Item')}</td><td>${it.quantity || 0}</td><td>${(it.price || 0).toFixed(2)}</td><td>${(it.total || 0).toFixed(2)}</td></tr>`).join('')}
+            </tbody></table>` : '<div style="padding:8px; background:#fef5e7;">No line items recorded</div>'}
+            <div class="total-line">Total: RM ${(rec.total || 0).toFixed(2)}</div>
+        </div>`}).join('')}
+    <div class="grand-total">🏁 GRAND TOTAL: RM ${grandTotal.toFixed(2)}</div>
+    <div style="text-align:center; margin-top: 40px; font-size: 10px; color: gray;">End of IRS Report — ${receipts.length} transactions</div>
+    </body></html>`;
+}
             
             // ----- Wire event listeners for IRS -----
             function openReceiptChoiceModal() { receiptChoiceModal.classList.add('active'); }
