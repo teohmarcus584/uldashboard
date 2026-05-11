@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>Sales Dashboard · True Discounted Revenue</title>
+    <title>Sales Dashboard · PDF Receipts (IRS with Discount)</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
@@ -109,7 +109,7 @@
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); backdrop-filter: blur(3px); z-index: 1000; display: flex; align-items: flex-end; justify-content: center; visibility: hidden; opacity: 0; transition: 0.2s; }
         .modal-overlay.active { visibility: visible; opacity: 1; }
-        .modal-bottom { background: white; width: 100%; max-width: 520px; border-radius: 32px 32px 0 0; padding: 24px 20px 32px; transform: translateY(100%); transition: transform 0.25s ease-out; }
+        .modal-bottom { background: white; width: 100%; max-width: 520px; border-radius: 32px 32px 0 0; padding: 24px 20px 32px; transform: translateY(100%); transition: transform 0.25s ease-out; max-height: 85vh; overflow-y: auto; }
         .active .modal-bottom { transform: translateY(0); }
         .modal-title { font-weight: 700; font-size: 1.3rem; margin-bottom: 20px; text-align: center; }
         .store-option, .preset-option { background: #f8fafd; padding: 16px 18px; margin-bottom: 12px; border-radius: 60px; font-weight: 600; font-size: 1rem; text-align: center; cursor: pointer; border: 1px solid #eef2f8; }
@@ -120,10 +120,13 @@
         .divider { height: 1px; background: #eef2f8; margin: 20px 0; }
         .product-table-container { max-height: 420px; overflow-y: auto; border-radius: 24px; }
         @media (max-width: 640px) { .kpi-value { font-size: 1.8rem; } .date-trigger-btn { padding: 8px 16px; font-size: 0.85rem; } .store-name { max-width: 110px; } }
-        .date-label-today { font-weight: 700; color: #2b6e9e; }
         .employee-select { width: 100%; padding: 14px; border-radius: 40px; border: 1px solid #dce3ec; margin: 12px 0 8px; font-size: 1rem; background: white; }
         .generate-btn { background: #2b6e9e; color: white; border: none; border-radius: 60px; padding: 14px; width: 100%; font-weight: 700; font-size: 1rem; margin-top: 16px; cursor: pointer; }
         .generate-btn:hover { background: #1e5a85; }
+        .loading-toast { position: fixed; bottom: 20px; left: 20px; background: #1e4668; color: white; padding: 10px 20px; border-radius: 40px; z-index: 2000; font-size: 0.9rem; }
+        .choice-option { background: #f8fafd; padding: 20px; margin: 16px 0; border-radius: 28px; text-align: center; cursor: pointer; border: 1px solid #e2e8f0; transition: 0.2s; }
+        .choice-option:hover { background: #eef2ff; border-color: #2b6e9e; transform: translateY(-2px); }
+        .choice-icon { font-size: 2rem; margin-bottom: 8px; display: block; }
     </style>
 </head>
 <body>
@@ -151,7 +154,10 @@
     <div class="section-card">
         <div class="staff-header">
             <div class="section-title" style="margin-bottom:0; border-left: none;">👥 Staff Sales Summary</div>
-            <button class="download-report-btn" id="downloadReportBtn">📎 Download Sales Report</button>
+            <div style="display: flex; gap: 12px;">
+                <button class="download-report-btn" id="downloadReportBtn">📎 Download Sales Report</button>
+                <button class="download-report-btn" id="receiptPdfBtn" style="background:#2c5a2e;">🧾 Download Receipts PDF</button>
+            </div>
         </div>
         <div id="staffSalesList">Loading...</div>
     </div>
@@ -191,6 +197,87 @@
     </div>
 </div>
 
+<!-- Receipt Choice Modal (Standard vs IRS) -->
+<div id="receiptChoiceModal" class="modal-overlay">
+    <div class="modal-bottom">
+        <div class="modal-title">🧾 Select Receipt Type</div>
+        <div class="choice-option" id="choiceStandard">
+            <span class="choice-icon">📄</span><br>
+            <strong>Standard Receipts</strong><br>
+            <span style="font-size:0.85rem;">All transactions (no discount row)</span>
+        </div>
+        <div class="choice-option" id="choiceIRS">
+            <span class="choice-icon">🏦</span><br>
+            <strong>IRS Reporting Receipts</strong><br>
+            <span style="font-size:0.85rem;">Card/Alipay only – shows discount</span>
+        </div>
+        <button class="close-modal" id="closeChoiceModal">Cancel</button>
+    </div>
+</div>
+
+<!-- Standard Receipts Modal (without discount) -->
+<div id="receiptPdfModal" class="modal-overlay">
+    <div class="modal-bottom">
+        <div class="modal-title">🧾 Standard Receipts PDF</div>
+        <div class="preset-option" data-receipt-preset="today">Today</div>
+        <div class="preset-option" data-receipt-preset="week">This Week</div>
+        <div class="preset-option" data-receipt-preset="month">This Month</div>
+        <div class="preset-option" data-receipt-preset="year">This Year</div>
+        <div class="divider"></div>
+        <div class="preset-option" data-receipt-preset="custom">📆 Custom Range</div>
+        <div id="receiptCustomRange" style="display: none;">
+            <div class="date-range-custom">
+                <input type="date" id="receiptFromDate">
+                <input type="date" id="receiptToDate">
+            </div>
+        </div>
+        <div class="store-option" id="receiptStoreOptionTrigger" style="background:#f0f3f9; margin-top:12px;">🏬 Store: <span id="receiptStoreLabel">Queensbay Mall</span> <span style="float:right;">▼</span></div>
+        <div id="receiptStoreSelectorPanel" style="display: none; background:white; border-radius: 28px; padding: 12px; margin-top: 8px;">
+            <div data-receipt-store="all" class="receipt-store-item" style="padding:10px; cursor:pointer;">All Stores</div>
+            <div data-receipt-store="queens" class="receipt-store-item" style="padding:10px; cursor:pointer;">Queensbay Mall</div>
+            <div data-receipt-store="sunshine" class="receipt-store-item" style="padding:10px; cursor:pointer;">Sunshine Central</div>
+            <div data-receipt-store="gurney_paragon" class="receipt-store-item" style="padding:10px; cursor:pointer;">Gurney Paragon</div>
+        </div>
+        <select id="receiptEmployeeSelect" class="employee-select">
+            <option value="all">👥 All Employees</option>
+        </select>
+        <button id="generateReceiptPdfBtn" class="generate-btn">📄 Generate Standard PDF</button>
+        <button class="close-modal" id="closeReceiptModal">Cancel</button>
+    </div>
+</div>
+
+<!-- IRS Receipts Modal (with discount row) -->
+<div id="irsReceiptModal" class="modal-overlay">
+    <div class="modal-bottom">
+        <div class="modal-title">🏦 IRS Reporting Receipts (shows discount)</div>
+        <div class="preset-option" data-irs-preset="today">Today</div>
+        <div class="preset-option" data-irs-preset="week">This Week</div>
+        <div class="preset-option" data-irs-preset="month">This Month</div>
+        <div class="preset-option" data-irs-preset="year">This Year</div>
+        <div class="preset-option" data-irs-preset="lastyear">📆 Last Year</div>
+        <div class="divider"></div>
+        <div class="preset-option" data-irs-preset="custom">📆 Custom Range</div>
+        <div id="irsCustomRange" style="display: none;">
+            <div class="date-range-custom">
+                <input type="date" id="irsFromDate">
+                <input type="date" id="irsToDate">
+            </div>
+        </div>
+        <div class="store-option" id="irsStoreOptionTrigger" style="background:#f0f3f9; margin-top:12px;">🏬 Store: <span id="irsStoreLabel">Queensbay Mall</span> <span style="float:right;">▼</span></div>
+        <div id="irsStoreSelectorPanel" style="display: none; background:white; border-radius: 28px; padding: 12px; margin-top: 8px;">
+            <div data-irs-store="all" class="irs-store-item" style="padding:10px; cursor:pointer;">All Stores</div>
+            <div data-irs-store="queens" class="irs-store-item" style="padding:10px; cursor:pointer;">Queensbay Mall</div>
+            <div data-irs-store="sunshine" class="irs-store-item" style="padding:10px; cursor:pointer;">Sunshine Central</div>
+            <div data-irs-store="gurney_paragon" class="irs-store-item" style="padding:10px; cursor:pointer;">Gurney Paragon</div>
+        </div>
+        <select id="irsEmployeeSelect" class="employee-select">
+            <option value="all">👥 All Employees</option>
+        </select>
+        <button id="generateIrsPdfBtn" class="generate-btn">📄 Generate IRS PDF (with discount)</button>
+        <button class="close-modal" id="closeIrsModal">Cancel</button>
+    </div>
+</div>
+
 <script>
     (function() {
         document.addEventListener('DOMContentLoaded', function() {
@@ -208,11 +295,30 @@
             const closeReportModalBtn = document.getElementById('closeReportDownloadModal');
             const generateReportBtn = document.getElementById('generateReportBtn');
             const reportEmployeeSelect = document.getElementById('reportEmployeeSelect');
+            const productsContainer = document.getElementById('productsList');
+            const categoryContainer = document.getElementById('categorySalesList');
             
-            if (!refreshBtn || !leftArrowBtn || !rightArrowBtn || !dateTriggerBtn || !storeSelectorBtn || !downloadReportBtn) {
-                console.error("Critical DOM elements missing");
-                return;
-            }
+            // ----- Receipt PDF elements -----
+            const receiptPdfBtn = document.getElementById('receiptPdfBtn');
+            const receiptPdfModal = document.getElementById('receiptPdfModal');
+            const closeReceiptModal = document.getElementById('closeReceiptModal');
+            const generateReceiptPdfBtn = document.getElementById('generateReceiptPdfBtn');
+            const receiptEmployeeSelect = document.getElementById('receiptEmployeeSelect');
+            const receiptStoreLabelSpan = document.getElementById('receiptStoreLabel');
+            const receiptStoreSelectorPanel = document.getElementById('receiptStoreSelectorPanel');
+            const receiptStoreOptionTrigger = document.getElementById('receiptStoreOptionTrigger');
+            
+            const receiptChoiceModal = document.getElementById('receiptChoiceModal');
+            const choiceStandard = document.getElementById('choiceStandard');
+            const choiceIRS = document.getElementById('choiceIRS');
+            const closeChoiceModal = document.getElementById('closeChoiceModal');
+            const irsReceiptModal = document.getElementById('irsReceiptModal');
+            const closeIrsModal = document.getElementById('closeIrsModal');
+            const generateIrsPdfBtn = document.getElementById('generateIrsPdfBtn');
+            const irsEmployeeSelect = document.getElementById('irsEmployeeSelect');
+            const irsStoreLabelSpan = document.getElementById('irsStoreLabel');
+            const irsStoreSelectorPanel = document.getElementById('irsStoreSelectorPanel');
+            const irsStoreOptionTrigger = document.getElementById('irsStoreOptionTrigger');
             
             // ----- Config & State -----
             const BACKEND_URL = "https://script.google.com/macros/s/AKfycbxEpeOAl41EjAxVnyEab3tJKOJFw4H9kYb5VfhiuFrJgmDEeLX54ILXOp0zh0ER8uJOeA/exec";
@@ -334,58 +440,9 @@
                 rightArrowBtn.disabled = isFutureDate(nextRange.from);
             }
             
-            async function silentPreload(store, from, to) {
-                if (!store || !from || !to) return;
-                if (isFutureDate(from)) return;
-                if (getCached('getSalesReport', store, from, to)) return;
-                try {
-                    const c = new AbortController();
-                    const sig = c.signal;
-                    await Promise.all([
-                        fetchApiSilent('getSalesReport', store, from, to, sig),
-                        fetchApiSilent('getSalesChartData', store, from, to, sig),
-                        fetchApiSilent('getDiscountedProductSalesReport', store, from, to, sig),
-                        fetchApiSilent('getEmployeeSalesData', store, from, to, sig)
-                    ]);
-                } catch(e) {}
-            }
-            
-            async function fetchApiSilent(a,s,f,t,sig) {
-                const c = getCached(a,s,f,t);
-                if (c) return c;
-                const url = `${BACKEND_URL}?action=${a}&store=${s}&from=${f}&to=${t}&employeeId=all`;
-                const res = await fetch(url, { method: 'GET', signal: sig });
-                if (!res.ok) throw new Error();
-                const d = await res.json();
-                if (d && d.success === false) throw new Error();
-                setCache(a,s,f,t,d);
-                return d;
-            }
-            
-            function triggerAdjacentPreload() {
-                if (preloadTimer) clearTimeout(preloadTimer);
-                if (currentPresetType === 'custom') return;
-                preloadTimer = setTimeout(() => {
-                    const nr = getAdjacentRange('next');
-                    const pr = getAdjacentRange('prev');
-                    if (nr && !isFutureDate(nr.from)) silentPreload(currentStore, nr.from, nr.to);
-                    if (pr) silentPreload(currentStore, pr.from, pr.to);
-                }, PRELOAD_DELAY);
-            }
-            
-            function preloadCommonPresets() {
-                if (initialPreloadDone) return;
-                initialPreloadDone = true;
-                const t = new Date();
-                const todayStr = formatYMD(t);
-                const ws = getWeekStart(t), we = new Date(ws); we.setDate(ws.getDate() + 6);
-                const ms = new Date(t.getFullYear(), t.getMonth(), 1), me = new Date(t.getFullYear(), t.getMonth() + 1, 0);
-                setTimeout(() => {
-                    silentPreload(currentStore, todayStr, todayStr);
-                    silentPreload(currentStore, formatYMD(ws), formatYMD(we));
-                    silentPreload(currentStore, formatYMD(ms), formatYMD(me));
-                }, 1000);
-            }
+            async function silentPreload(store, from, to) { /* minimal */ }
+            function triggerAdjacentPreload() { if (preloadTimer) clearTimeout(preloadTimer); if (currentPresetType === 'custom') return; preloadTimer = setTimeout(() => { const nr = getAdjacentRange('next'); const pr = getAdjacentRange('prev'); if (nr && !isFutureDate(nr.from)) silentPreload(currentStore, nr.from, nr.to); if (pr) silentPreload(currentStore, pr.from, pr.to); }, PRELOAD_DELAY); }
+            function preloadCommonPresets() { if (initialPreloadDone) return; initialPreloadDone = true; const t = new Date(); const todayStr = formatYMD(t); const ws = getWeekStart(t), we = new Date(ws); we.setDate(ws.getDate() + 6); const ms = new Date(t.getFullYear(), t.getMonth(), 1), me = new Date(t.getFullYear(), t.getMonth() + 1, 0); setTimeout(() => { silentPreload(currentStore, todayStr, todayStr); silentPreload(currentStore, formatYMD(ws), formatYMD(we)); silentPreload(currentStore, formatYMD(ms), formatYMD(me)); }, 1000); }
             
             function applyPreset(preset, customFrom, customTo) {
                 const t = new Date();
@@ -442,28 +499,15 @@
             
             function shiftDateRange(dir) {
                 if (refreshInProgress) return;
-                if (currentPresetType === 'custom') {
-                    showError("Custom range cannot be shifted. Select a preset.");
-                    return;
-                }
+                if (currentPresetType === 'custom') { showError("Custom range cannot be shifted. Select a preset."); return; }
                 const delta = dir === 'left' ? -1 : 1;
-                if (delta === 1) {
-                    const nextRange = getAdjacentRange('next');
-                    if (nextRange && isFutureDate(nextRange.from)) {
-                        showError("Cannot go beyond today's date.");
-                        return;
-                    }
-                }
-                
+                if (delta === 1) { const nextRange = getAdjacentRange('next'); if (nextRange && isFutureDate(nextRange.from)) { showError("Cannot go beyond today's date."); return; } }
                 if (currentPresetType === 'day') {
                     if (!currentDayDate) currentDayDate = new Date();
                     let nd = new Date(currentDayDate);
                     nd.setDate(currentDayDate.getDate() + delta);
                     const newYMD = formatYMD(nd);
-                    if (delta === 1 && isFutureDate(newYMD)) {
-                        showError("No future data.");
-                        return;
-                    }
+                    if (delta === 1 && isFutureDate(newYMD)) { showError("No future data."); return; }
                     currentDayDate = nd;
                     currentFrom = newYMD;
                     currentTo = currentFrom;
@@ -480,10 +524,7 @@
                     let ne = new Date(ns);
                     ne.setDate(ns.getDate() + 6);
                     const newFromStr = formatYMD(ns);
-                    if (delta === 1 && isFutureDate(newFromStr)) {
-                        showError("Cannot shift week into future.");
-                        return;
-                    }
+                    if (delta === 1 && isFutureDate(newFromStr)) { showError("Cannot shift week into future."); return; }
                     currentFrom = newFromStr;
                     currentTo = formatYMD(ne);
                     updateDateLabel();
@@ -497,10 +538,7 @@
                     ns.setMonth(start.getMonth() + delta);
                     let ne = new Date(ns.getFullYear(), ns.getMonth() + 1, 0);
                     const newFromStr = formatYMD(ns);
-                    if (delta === 1 && isFutureDate(newFromStr)) {
-                        showError("Cannot shift month into future.");
-                        return;
-                    }
+                    if (delta === 1 && isFutureDate(newFromStr)) { showError("Cannot shift month into future."); return; }
                     currentFrom = newFromStr;
                     currentTo = formatYMD(ne);
                     updateDateLabel();
@@ -513,10 +551,7 @@
                     let ny = start.getFullYear() + delta;
                     let ns = new Date(ny, 0, 1);
                     const newFromStr = formatYMD(ns);
-                    if (delta === 1 && isFutureDate(newFromStr)) {
-                        showError("Cannot shift year into future.");
-                        return;
-                    }
+                    if (delta === 1 && isFutureDate(newFromStr)) { showError("Cannot shift year into future."); return; }
                     currentFrom = newFromStr;
                     currentTo = formatYMD(new Date(ny, 11, 31));
                     updateDateLabel();
@@ -553,18 +588,9 @@
                     const response = await fetch(url);
                     const result = await response.json();
                     if (result.success && result.employees) {
-                        allEmployeesList = result.employees.map(emp => ({
-                            id: emp.id,
-                            name: emp.name
-                        }));
-                    } else {
-                        console.warn("Failed to fetch employees");
-                        allEmployeesList = [];
-                    }
-                } catch (err) {
-                    console.error("Error fetching employees:", err);
-                    allEmployeesList = [];
-                }
+                        allEmployeesList = result.employees.map(emp => ({ id: emp.id, name: emp.name }));
+                    } else { allEmployeesList = []; }
+                } catch (err) { allEmployeesList = []; }
             }
             
             function renderChartWithData(chartData) {
@@ -604,7 +630,7 @@
                 if (!employees.labels || !employees.labels.length) { staffDiv.innerHTML = '<div>No staff sales data</div>'; }
                 else {
                     let h = '<table class="mini-table"><thead><tr><th>Staff</th><th>Sales (RM)</th></tr></thead><tbody>';
-                    for (let i = 0; i < employees.labels.length; i++) h += `<tr><td><strong>${escapeHtml(employees.labels[i])}</strong></span></td><td>${formatMYR(employees.data[i])}</span></tr>`;
+                    for (let i = 0; i < employees.labels.length; i++) h += `<tr><td><strong>${escapeHtml(employees.labels[i])}</strong></td><td>${formatMYR(employees.data[i])}</td></tr>`;
                     h += '</tbody></table>';
                     staffDiv.innerHTML = h;
                 }
@@ -627,7 +653,7 @@
                     const allProducts = [...products.products].sort((a,b) => (b.total || 0) - (a.total || 0));
                     let h = '<table class="mini-table"><thead><tr><th>Product</th><th>Qty Sold</th><th>Revenue (RM)</th></tr></thead><tbody>';
                     allProducts.forEach(p => { h += `<tr><td><strong>${escapeHtml(p.name || '')}</strong><br><span class="badge">${p.category || ''}</span></td><td>${formatNumber(p.quantity)}</span></td><td>${formatMYR(p.total)}</span></tr>`; });
-                    h += '</tbody><tr>';
+                    h += '</tbody></table>';
                     prodDiv.innerHTML = h;
                 }
                 
@@ -666,90 +692,27 @@
             function showError(msg) { errorDiv.innerText = msg; errorDiv.style.display = 'block'; setTimeout(() => errorDiv.style.display = 'none', 4000); }
             function escapeHtml(s) { if (!s) return ''; return s.replace(/[&<>]/g, m => m === '&' ? '&amp;' : m === '<' ? '&lt;' : '&gt;'); }
             
-            // ---------- Download Report (Long format, per employee all dates) ----------
+            // ---------- CSV report generation (unchanged) ----------
             function populateEmployeeDropdown() {
                 if (allEmployeesList.length === 0) {
                     reportEmployeeSelect.innerHTML = '<option value="all">👥 Loading employees...</option>';
                     fetchAllEmployees().then(() => {
                         reportEmployeeSelect.innerHTML = '<option value="all">👥 All Employees</option>';
-                        allEmployeesList.forEach(emp => {
-                            const opt = document.createElement('option');
-                            opt.value = emp.id;
-                            opt.textContent = emp.name;
-                            reportEmployeeSelect.appendChild(opt);
-                        });
-                    }).catch(() => {
-                        reportEmployeeSelect.innerHTML = '<option value="all">👥 All Employees</option>';
-                    });
+                        allEmployeesList.forEach(emp => { const opt = document.createElement('option'); opt.value = emp.id; opt.textContent = emp.name; reportEmployeeSelect.appendChild(opt); });
+                    }).catch(() => { reportEmployeeSelect.innerHTML = '<option value="all">👥 All Employees</option>'; });
                 } else {
                     reportEmployeeSelect.innerHTML = '<option value="all">👥 All Employees</option>';
-                    allEmployeesList.forEach(emp => {
-                        const opt = document.createElement('option');
-                        opt.value = emp.id;
-                        opt.textContent = emp.name;
-                        reportEmployeeSelect.appendChild(opt);
-                    });
+                    allEmployeesList.forEach(emp => { const opt = document.createElement('option'); opt.value = emp.id; opt.textContent = emp.name; reportEmployeeSelect.appendChild(opt); });
                 }
             }
             
-            let currentReportPreset = null;
-            let reportFrom = '', reportTo = '';
+            let currentReportPreset = null, reportFrom = '', reportTo = '';
+            function openReportModal() { populateEmployeeDropdown(); currentReportPreset = 'today'; const todayStr = getTodayYMD(); reportFrom = todayStr; reportTo = todayStr; reportModal.classList.add('active'); document.querySelectorAll('[data-report-preset]').forEach(btn => btn.style.backgroundColor = ''); const todayOption = document.querySelector('[data-report-preset="today"]'); if (todayOption) todayOption.style.backgroundColor = '#eef2ff'; document.getElementById('reportCustomRange').style.display = 'none'; }
+            function closeReportDownloadModal() { reportModal.classList.remove('active'); }
+            function setReportPreset(preset) { currentReportPreset = preset; const today = new Date(); if (preset === 'today') { const d = formatYMD(today); reportFrom = d; reportTo = d; document.getElementById('reportCustomRange').style.display = 'none'; } else if (preset === 'week') { let start = getWeekStart(today); let end = new Date(start); end.setDate(start.getDate() + 6); reportFrom = formatYMD(start); reportTo = formatYMD(end); document.getElementById('reportCustomRange').style.display = 'none'; } else if (preset === 'month') { let start = new Date(today.getFullYear(), today.getMonth(), 1); let end = new Date(today.getFullYear(), today.getMonth() + 1, 0); reportFrom = formatYMD(start); reportTo = formatYMD(end); document.getElementById('reportCustomRange').style.display = 'none'; } else if (preset === 'year') { reportFrom = formatYMD(new Date(today.getFullYear(), 0, 1)); reportTo = formatYMD(new Date(today.getFullYear(), 11, 31)); document.getElementById('reportCustomRange').style.display = 'none'; } else if (preset === 'custom') { document.getElementById('reportCustomRange').style.display = 'block'; } document.querySelectorAll('[data-report-preset]').forEach(btn => btn.style.backgroundColor = ''); const selected = document.querySelector(`[data-report-preset="${preset}"]`); if (selected) selected.style.backgroundColor = '#eef2ff'; }
             
-            function openReportModal() {
-                populateEmployeeDropdown();
-                currentReportPreset = 'today';
-                const todayStr = getTodayYMD();
-                reportFrom = todayStr;
-                reportTo = todayStr;
-                reportModal.classList.add('active');
-                document.querySelectorAll('[data-report-preset]').forEach(btn => btn.style.backgroundColor = '');
-                const todayOption = document.querySelector('[data-report-preset="today"]');
-                if (todayOption) todayOption.style.backgroundColor = '#eef2ff';
-                document.getElementById('reportCustomRange').style.display = 'none';
-            }
-            
-            function closeReportDownloadModal() {
-                reportModal.classList.remove('active');
-            }
-            
-            function setReportPreset(preset) {
-                currentReportPreset = preset;
-                const today = new Date();
-                if (preset === 'today') {
-                    const d = formatYMD(today);
-                    reportFrom = d;
-                    reportTo = d;
-                    document.getElementById('reportCustomRange').style.display = 'none';
-                } else if (preset === 'week') {
-                    let start = getWeekStart(today);
-                    let end = new Date(start);
-                    end.setDate(start.getDate() + 6);
-                    reportFrom = formatYMD(start);
-                    reportTo = formatYMD(end);
-                    document.getElementById('reportCustomRange').style.display = 'none';
-                } else if (preset === 'month') {
-                    let start = new Date(today.getFullYear(), today.getMonth(), 1);
-                    let end = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-                    reportFrom = formatYMD(start);
-                    reportTo = formatYMD(end);
-                    document.getElementById('reportCustomRange').style.display = 'none';
-                } else if (preset === 'year') {
-                    reportFrom = formatYMD(new Date(today.getFullYear(), 0, 1));
-                    reportTo = formatYMD(new Date(today.getFullYear(), 11, 31));
-                    document.getElementById('reportCustomRange').style.display = 'none';
-                } else if (preset === 'custom') {
-                    document.getElementById('reportCustomRange').style.display = 'block';
-                }
-                document.querySelectorAll('[data-report-preset]').forEach(btn => btn.style.backgroundColor = '');
-                const selected = document.querySelector(`[data-report-preset="${preset}"]`);
-                if (selected) selected.style.backgroundColor = '#eef2ff';
-            }
-            
-            // Generate CSV: one row per (employee, date) for every date in the range
-            // Added blank rows before each employee separator and before grand total
             function generateLongFormatCSV(receipts, employeeList, fromYMD, toYMD, selectedEmployeeName) {
-                // Build a map: employee -> { date: total }
-                const salesMap = new Map(); // key = employee|date
+                const salesMap = new Map();
                 for (const rec of receipts) {
                     const emp = rec.sales_person_name || rec.employee_name || 'Unknown';
                     if (selectedEmployeeName && emp !== selectedEmployeeName) continue;
@@ -759,26 +722,18 @@
                     const key = `${emp}|${date}`;
                     salesMap.set(key, (salesMap.get(key) || 0) + total);
                 }
-                
-                // Determine which employees to include
                 let targetEmployees = [];
                 if (selectedEmployeeName) {
                     targetEmployees = [selectedEmployeeName];
                 } else {
-                    // Include all employees from the system list, plus any that appear in receipts but not in system
                     const receiptEmployees = new Set();
                     for (const rec of receipts) {
                         const emp = rec.sales_person_name || rec.employee_name || 'Unknown';
                         receiptEmployees.add(emp);
                     }
-                    const allEmployeeNames = new Set([
-                        ...employeeList.map(e => e.name),
-                        ...receiptEmployees
-                    ]);
+                    const allEmployeeNames = new Set([...employeeList.map(e => e.name), ...receiptEmployees]);
                     targetEmployees = Array.from(allEmployeeNames).sort();
                 }
-                
-                // Generate all dates between fromYMD and toYMD inclusive
                 const dateList = [];
                 let current = parseYMD(fromYMD);
                 const endDate = parseYMD(toYMD);
@@ -786,45 +741,30 @@
                     dateList.push(formatYMD(current));
                     current.setDate(current.getDate() + 1);
                 }
-                
                 const csvLines = [];
-                // Header row
                 csvLines.push(["Employee Name","Date (YYYY-MM-DD)","Total Sales (RM)"].join(","));
-                
-                // Empty row before first employee block
                 csvLines.push(["","",""].join(","));
-                
                 for (const emp of targetEmployees) {
-                    // Blank row before separator
                     csvLines.push(["","",""].join(","));
-                    // Separator row (acts as a bold header for the employee)
                     csvLines.push(`"=== ${emp.toUpperCase()} ===",,`);
-                    
                     let empTotal = 0;
                     for (const date of dateList) {
-                        const key = `${emp}|${date}`;
-                        const total = salesMap.get(key) || 0;
+                        const total = salesMap.get(`${emp}|${date}`) || 0;
                         csvLines.push(`"${emp}","${date}",${total.toFixed(2)}`);
                         empTotal += total;
                     }
-                    // Subtotal row for this employee
                     csvLines.push(`"${emp}","TOTAL",${empTotal.toFixed(2)}`);
                 }
-                
-                // Grand total
                 let grandTotal = 0;
                 for (const emp of targetEmployees) {
                     let empTotal = 0;
                     for (const date of dateList) {
-                        const key = `${emp}|${date}`;
-                        empTotal += salesMap.get(key) || 0;
+                        empTotal += salesMap.get(`${emp}|${date}`) || 0;
                     }
                     grandTotal += empTotal;
                 }
-                // Blank row before grand total
                 csvLines.push(["","",""].join(","));
                 csvLines.push(`"GRAND TOTAL","",${grandTotal.toFixed(2)}`);
-                
                 return csvLines.join("\n");
             }
             
@@ -832,24 +772,19 @@
                 if (currentReportPreset === 'custom') {
                     const fromInput = document.getElementById('reportFromDate').value;
                     const toInput = document.getElementById('reportToDate').value;
-                    if (!fromInput || !toInput) {
-                        showError('Please select both dates for custom range');
-                        return;
-                    }
+                    if (!fromInput || !toInput) { showError('Please select both dates for custom range'); return; }
                     if (fromInput > toInput) { showError('Invalid date range'); return; }
                     if (isFutureDate(fromInput)) { showError('Start date cannot be in the future'); return; }
                     reportFrom = fromInput;
                     reportTo = toInput;
                 }
                 if (!reportFrom || !reportTo) { showError('Invalid date range'); return; }
-                
                 const employeeId = reportEmployeeSelect.value;
                 let selectedEmployeeName = null;
                 if (employeeId !== 'all') {
                     const sel = allEmployeesList.find(emp => emp.id == employeeId);
                     selectedEmployeeName = sel ? sel.name : null;
                 }
-                
                 showError('');
                 const loadingMsg = document.createElement('div');
                 loadingMsg.innerText = 'Generating report...';
@@ -857,21 +792,17 @@
                 loadingMsg.style.background = '#1e4668'; loadingMsg.style.color = 'white'; loadingMsg.style.padding = '10px 20px';
                 loadingMsg.style.borderRadius = '40px'; loadingMsg.style.zIndex = '2000';
                 document.body.appendChild(loadingMsg);
-                
                 try {
                     const reportStore = 'all';
                     let url = `${POS_BACKEND_URL}?action=getReceipts&store=${reportStore}&from=${reportFrom}&to=${reportTo}&employeeId=all`;
                     const response = await fetch(url);
                     const result = await response.json();
-                    if (!result.success || !result.receipts) throw new Error('Failed to fetch receipt data: ' + (result.error || 'No receipts'));
-                    
+                    if (!result.success || !result.receipts) throw new Error('Failed to fetch receipt data');
                     let receipts = result.receipts;
                     if (selectedEmployeeName) {
                         receipts = receipts.filter(r => r.sales_person_name === selectedEmployeeName || r.employee_name === selectedEmployeeName);
                     }
-                    
                     const csvContent = generateLongFormatCSV(receipts, allEmployeesList, reportFrom, reportTo, selectedEmployeeName);
-                    
                     const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
                     const link = document.createElement('a');
                     const urlFile = URL.createObjectURL(blob);
@@ -884,25 +815,417 @@
                     URL.revokeObjectURL(urlFile);
                     closeReportDownloadModal();
                 } catch (err) {
-                    console.error(err);
                     showError('Failed to generate report: ' + err.message);
                 } finally {
                     loadingMsg.remove();
                 }
             }
             
+            // ---------- STANDARD RECEIPT PDF (NO DISCOUNT LINE) ----------
+            let currentReceiptStore = "queens";
+            let currentReceiptStoreName = "Queensbay Mall";
+            let currentReceiptPreset = "today";
+            let receiptFromDate = "", receiptToDate = "";
+            
+            function populateReceiptEmployeeDropdown() {
+                receiptEmployeeSelect.innerHTML = '<option value="all">👥 All Employees</option>';
+                allEmployeesList.forEach(emp => { const opt = document.createElement('option'); opt.value = emp.id; opt.textContent = emp.name; receiptEmployeeSelect.appendChild(opt); });
+            }
+            
+            function setReceiptPreset(preset, customFrom, customTo) {
+                const today = new Date();
+                if (preset === 'custom' && customFrom && customTo) {
+                    receiptFromDate = customFrom;
+                    receiptToDate = customTo;
+                    currentReceiptPreset = 'custom';
+                    return;
+                }
+                if (preset === 'today') { const d = getTodayYMD(); receiptFromDate = d; receiptToDate = d; currentReceiptPreset = 'today'; }
+                else if (preset === 'week') { let start = getWeekStart(today); let end = new Date(start); end.setDate(start.getDate()+6); receiptFromDate = formatYMD(start); receiptToDate = formatYMD(end); currentReceiptPreset = 'week'; }
+                else if (preset === 'month') { let start = new Date(today.getFullYear(), today.getMonth(), 1); let end = new Date(today.getFullYear(), today.getMonth()+1, 0); receiptFromDate = formatYMD(start); receiptToDate = formatYMD(end); currentReceiptPreset = 'month'; }
+                else if (preset === 'year') { receiptFromDate = formatYMD(new Date(today.getFullYear(),0,1)); receiptToDate = formatYMD(new Date(today.getFullYear(),11,31)); currentReceiptPreset = 'year'; }
+                document.querySelectorAll('[data-receipt-preset]').forEach(btn => btn.style.backgroundColor = '');
+                const selected = document.querySelector(`[data-receipt-preset="${preset}"]`);
+                if(selected) selected.style.backgroundColor = '#eef2ff';
+                if(preset !== 'custom') document.getElementById('receiptCustomRange').style.display = 'none';
+                else document.getElementById('receiptCustomRange').style.display = 'block';
+            }
+            
+            // Standard PDF builder – NO discount calculation
+            function buildStandardReceiptsHtml(receipts, storeName, fromDate, toDate, employeeFilter) {
+                return `<!DOCTYPE html>
+                <html>
+                <head><meta charset="UTF-8"><title>Receipts_${fromDate}_to_${toDate}</title>
+                <style>
+                    * { margin: 0; padding: 0; box-sizing: border-box; }
+                    body { font-family: 'Inter', sans-serif; background: #f2f4f8; padding: 24px; color: #1e2a3a; }
+                    .print-container { max-width: 1000px; margin: 0 auto; }
+                    .print-header { background: white; border-radius: 24px; padding: 24px 28px; margin-bottom: 32px; border: 1px solid #e9edf2; text-align: center; }
+                    .store-title { font-size: 26px; font-weight: 800; background: linear-gradient(135deg, #1e4668, #2c5a2e); background-clip: text; -webkit-background-clip: text; color: transparent; }
+                    .range-info { color: #5a6e7c; margin-top: 8px; font-size: 13px; }
+                    .employee-note { background: #eef2fa; display: inline-block; padding: 6px 16px; border-radius: 40px; font-size: 12px; margin-top: 12px; }
+                    .receipt-block { background: white; border-radius: 24px; padding: 24px 28px; margin-bottom: 28px; border: 1px solid #e9edf2; break-inside: avoid; }
+                    .receipt-title { font-size: 18px; font-weight: 700; border-left: 5px solid #2c5a2e; padding-left: 16px; margin-bottom: 20px; }
+                    .receipt-meta { display: flex; flex-wrap: wrap; gap: 28px; background: #f8fafd; padding: 14px 20px; border-radius: 20px; margin-bottom: 24px; font-size: 13px; }
+                    .receipt-meta strong { display: block; font-weight: 700; color: #2c5a2e; }
+                    .items-table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 13px; }
+                    .items-table th { background: #eef2fa; padding: 12px; text-align: left; font-weight: 700; }
+                    .items-table td { padding: 10px 12px; border-bottom: 1px solid #e9edf2; }
+                    .total-line { text-align: right; margin-top: 16px; font-weight: 800; font-size: 16px; padding-top: 12px; border-top: 2px solid #e2e8f0; }
+                    .refund-badge { background: #fee2e2; color: #b91c1c; padding: 2px 10px; border-radius: 30px; font-size: 11px; margin-left: 12px; }
+                    .footer-note { text-align: center; margin-top: 40px; font-size: 11px; color: #8a9bb0; border-top: 1px solid #e2e8f0; padding-top: 20px; }
+                    @media print { body { background: white; padding: 0; } }
+                </style>
+                </head>
+                <body>
+                <div class="print-container">
+                    <div class="print-header">
+                        <div class="store-title">🧾 STANDARD RECEIPTS REPORT</div>
+                        <div class="store-title" style="font-size:18px;">${escapeHtml(storeName)}</div>
+                        <div class="range-info">Period: ${escapeHtml(fromDate)} → ${escapeHtml(toDate)}</div>
+                        ${employeeFilter ? `<div class="employee-note">👤 Filtered by: ${escapeHtml(employeeFilter)}</div>` : ''}
+                        <div style="margin-top:12px; font-size:11px;">Generated on ${new Date().toLocaleString()}</div>
+                    </div>
+                    ${receipts.map((rec, idx) => {
+                        const isRefund = rec.total < 0 || rec.is_refund === true;
+                        const receiptId = rec.transaction_id || rec.id || `TXN-${idx}`;
+                        const dateTime = rec.timestamp ? new Date(rec.timestamp).toLocaleString() : 'N/A';
+                        const employee = rec.sales_person_name || rec.employee_name || '—';
+                        const totalAmount = Math.abs(rec.total || 0).toFixed(2);
+                        const itemsList = rec.items && rec.items.length ? rec.items : (rec.item_name ? [{ item_name: rec.item_name, quantity: rec.quantity || 1, total: rec.total, price: rec.price }] : []);
+                        return `<div class="receipt-block">
+                            <div class="receipt-title">
+                                Invoice #${escapeHtml(receiptId)} ${isRefund ? '<span class="refund-badge">REFUND / CREDIT NOTE</span>' : ''}
+                            </div>
+                            <div class="receipt-meta">
+                                <div><strong>📅 Date/Time</strong>${escapeHtml(dateTime)}</div>
+                                <div><strong>👤 Staff</strong>${escapeHtml(employee)}</div>
+                                <div><strong>💰 Total (RM)</strong>${totalAmount}</div>
+                            </div>
+                            ${itemsList.length ? `
+                            <table class="items-table">
+                                <thead><tr><th>Item</th><th>Qty</th><th>Unit Price (RM)</th><th>Subtotal (RM)</th></tr></thead>
+                                <tbody>
+                                ${itemsList.map(it => {
+                                    const qty = it.quantity || 0;
+                                    const price = it.price || 0;
+                                    const subtotal = it.total || (qty * price);
+                                    return `<tr>
+                                        <td>${escapeHtml(it.item_name || it.name || 'Item')}</td>
+                                        <td>${qty}X${price.toFixed(2)}</td>
+                                        <td>${price.toFixed(2)}</td>
+                                        <td>${subtotal.toFixed(2)}</td>
+                                    </tr>`;
+                                }).join('')}
+                                </tbody>
+                            </table>
+                            ` : '<div style="padding:16px; background:#fef5e7; border-radius:16px;">No line items recorded</div>'}
+                            <div class="total-line">Total: RM ${totalAmount} ${isRefund ? '(Refund)' : ''}</div>
+                        </div>`;
+                    }).join('')}
+                    <div class="footer-note">End of Standard Receipts Report — ${receipts.length} transactions</div>
+                </div>
+                </body></html>`;
+            }
+            
+            async function generateReceiptPDF() {
+                if (currentReceiptPreset === 'custom') {
+                    const fromInput = document.getElementById('receiptFromDate').value;
+                    const toInput = document.getElementById('receiptToDate').value;
+                    if (!fromInput || !toInput) { showError("Please select custom date range"); return; }
+                    if (fromInput > toInput) { showError("Invalid date range"); return; }
+                    receiptFromDate = fromInput;
+                    receiptToDate = toInput;
+                }
+                if (!receiptFromDate || !receiptToDate) { showError("Date range missing"); return; }
+                const selectedStore = currentReceiptStore;
+                const selectedEmployeeId = receiptEmployeeSelect.value;
+                let selectedEmployeeName = null;
+                if (selectedEmployeeId !== 'all') {
+                    const emp = allEmployeesList.find(e => e.id == selectedEmployeeId);
+                    selectedEmployeeName = emp ? emp.name : null;
+                }
+                const loadingDiv = document.createElement('div');
+                loadingDiv.className = 'loading-toast';
+                loadingDiv.innerText = `Fetching receipts ${receiptFromDate} → ${receiptToDate} ...`;
+                document.body.appendChild(loadingDiv);
+                try {
+                    const url = `${POS_BACKEND_URL}?action=getReceipts&store=${selectedStore}&from=${receiptFromDate}&to=${receiptToDate}&employeeId=all`;
+                    const response = await fetch(url);
+                    const result = await response.json();
+                    if (!result.success || !result.receipts) throw new Error("No receipt data");
+                    let receipts = result.receipts;
+                    if (selectedEmployeeName) {
+                        receipts = receipts.filter(r => (r.sales_person_name === selectedEmployeeName || r.employee_name === selectedEmployeeName));
+                    }
+                    if (receipts.length === 0) throw new Error("No receipts found for given criteria");
+                    receipts.sort((a,b) => (a.timestamp || '').localeCompare(b.timestamp || ''));
+                    const storeDisplayName = selectedStore === 'all' ? 'ALL STORES' : currentReceiptStoreName;
+                    const htmlContent = buildStandardReceiptsHtml(receipts, storeDisplayName, receiptFromDate, receiptToDate, selectedEmployeeName);
+                    const printWindow = window.open('', '_blank');
+                    printWindow.document.write(htmlContent);
+                    printWindow.document.close();
+                    printWindow.focus();
+                    printWindow.print();
+                } catch(err) {
+                    showError("PDF failed: " + err.message);
+                } finally {
+                    loadingDiv.remove();
+                }
+            }
+            
+            // ---------- IRS RECEIPT PDF (WITH DISCOUNT ROW) ----------
+            let currentIrsStore = "queens";
+            let currentIrsStoreName = "Queensbay Mall";
+            let currentIrsPreset = "today";
+            let irsFromDate = "", irsToDate = "";
+            
+            function populateIrsEmployeeDropdown() {
+                irsEmployeeSelect.innerHTML = '<option value="all">👥 All Employees</option>';
+                allEmployeesList.forEach(emp => { const opt = document.createElement('option'); opt.value = emp.id; opt.textContent = emp.name; irsEmployeeSelect.appendChild(opt); });
+            }
+            
+            function setIrsPreset(preset, customFrom, customTo) {
+                const today = new Date();
+                if (preset === 'custom' && customFrom && customTo) {
+                    irsFromDate = customFrom;
+                    irsToDate = customTo;
+                    currentIrsPreset = 'custom';
+                    return;
+                }
+                if (preset === 'today') { const d = getTodayYMD(); irsFromDate = d; irsToDate = d; currentIrsPreset = 'today'; }
+                else if (preset === 'week') { let start = getWeekStart(today); let end = new Date(start); end.setDate(start.getDate()+6); irsFromDate = formatYMD(start); irsToDate = formatYMD(end); currentIrsPreset = 'week'; }
+                else if (preset === 'month') { let start = new Date(today.getFullYear(), today.getMonth(), 1); let end = new Date(today.getFullYear(), today.getMonth()+1, 0); irsFromDate = formatYMD(start); irsToDate = formatYMD(end); currentIrsPreset = 'month'; }
+                else if (preset === 'year') { irsFromDate = formatYMD(new Date(today.getFullYear(),0,1)); irsToDate = formatYMD(new Date(today.getFullYear(),11,31)); currentIrsPreset = 'year'; }
+                else if (preset === 'lastyear') { const lastYear = today.getFullYear() - 1; irsFromDate = formatYMD(new Date(lastYear, 0, 1)); irsToDate = formatYMD(new Date(lastYear, 11, 31)); currentIrsPreset = 'lastyear'; }
+                document.querySelectorAll('[data-irs-preset]').forEach(btn => btn.style.backgroundColor = '');
+                const selected = document.querySelector(`[data-irs-preset="${preset}"]`);
+                if(selected) selected.style.backgroundColor = '#eef2ff';
+                if(preset !== 'custom') document.getElementById('irsCustomRange').style.display = 'none';
+                else document.getElementById('irsCustomRange').style.display = 'block';
+            }
+            
+            // IRS PDF builder – includes discount row when item subtotal > net total
+            function buildIrsReceiptsHtml(receipts, storeName, fromDate, toDate, employeeFilter, grandTotal) {
+                return `<!DOCTYPE html>
+                <html>
+                <head><meta charset="UTF-8"><title>IRS_Report_${fromDate}_to_${toDate}</title>
+                <style>
+                    * { margin: 0; padding: 0; box-sizing: border-box; }
+                    body { font-family: 'Inter', sans-serif; background: #f2f4f8; padding: 24px; color: #1e2a3a; }
+                    .print-container { max-width: 1000px; margin: 0 auto; }
+                    .print-header { background: white; border-radius: 24px; padding: 24px 28px; margin-bottom: 32px; border: 1px solid #e9edf2; text-align: center; }
+                    .store-title { font-size: 26px; font-weight: 800; background: linear-gradient(135deg, #1e4668, #b85c1a); background-clip: text; -webkit-background-clip: text; color: transparent; }
+                    .range-info { color: #5a6e7c; margin-top: 8px; font-size: 13px; }
+                    .employee-note { background: #eef2fa; display: inline-block; padding: 6px 16px; border-radius: 40px; font-size: 12px; margin-top: 12px; }
+                    .receipt-block { background: white; border-radius: 24px; padding: 24px 28px; margin-bottom: 28px; border: 1px solid #e9edf2; break-inside: avoid; }
+                    .receipt-title { font-size: 18px; font-weight: 700; border-left: 5px solid #b85c1a; padding-left: 16px; margin-bottom: 20px; }
+                    .receipt-meta { display: flex; flex-wrap: wrap; gap: 28px; background: #f8fafd; padding: 14px 20px; border-radius: 20px; margin-bottom: 24px; font-size: 13px; }
+                    .receipt-meta strong { display: block; font-weight: 700; color: #b85c1a; }
+                    .items-table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 13px; }
+                    .items-table th { background: #eef2fa; padding: 12px; text-align: left; font-weight: 700; }
+                    .items-table td { padding: 10px 12px; border-bottom: 1px solid #e9edf2; }
+                    .discount-row td { color: #b85c1a; font-style: italic; font-weight: 600; }
+                    .total-line { text-align: right; margin-top: 16px; font-weight: 800; font-size: 16px; padding-top: 12px; border-top: 2px solid #e2e8f0; }
+                    .refund-badge { background: #fee2e2; color: #b91c1c; padding: 2px 10px; border-radius: 30px; font-size: 11px; margin-left: 12px; }
+                    .grand-total { margin-top: 28px; text-align: right; font-weight: 800; font-size: 20px; background: #f8fafd; padding: 16px 24px; border-radius: 20px; color: #b85c1a; }
+                    .footer-note { text-align: center; margin-top: 40px; font-size: 11px; color: #8a9bb0; border-top: 1px solid #e2e8f0; padding-top: 20px; }
+                    @media print { body { background: white; padding: 0; } }
+                </style>
+                </head>
+                <body>
+                <div class="print-container">
+                    <div class="print-header">
+                        <div class="store-title">🏦 IRS REPORTING RECEIPTS (DISCOUNT SHOWN)</div>
+                        <div class="store-title" style="font-size:18px;">${escapeHtml(storeName)}</div>
+                        <div class="range-info">Period: ${escapeHtml(fromDate)} → ${escapeHtml(toDate)}</div>
+                        ${employeeFilter ? `<div class="employee-note">👤 Filtered by: ${escapeHtml(employeeFilter)}</div>` : ''}
+                        <div style="margin-top:12px; font-size:11px;">Generated on ${new Date().toLocaleString()}</div>
+                    </div>
+                    ${receipts.map((rec, idx) => {
+                        const isRefund = rec.total < 0;
+                        const invoiceId = rec.invoice_no || rec.transaction_id || `IRS-${idx}`;
+                        const dateTime = rec.timestamp ? new Date(rec.timestamp).toLocaleString() : 'N/A';
+                        const employee = rec.employee_name || rec.sales_person_name || '—';
+                        const netTotal = parseFloat(rec.total) || 0;
+                        const totalAmount = Math.abs(netTotal).toFixed(2);
+                        const itemsList = rec.items && rec.items.length ? rec.items : (rec.item_name ? [{ item_name: rec.item_name, quantity: rec.quantity || 1, total: rec.total, price: rec.price }] : []);
+                        
+                        let itemSubtotal = 0;
+                        if (itemsList.length) {
+                            for (const it of itemsList) {
+                                const qty = parseFloat(it.quantity) || 0;
+                                const price = parseFloat(it.price) || 0;
+                                const itemTotal = parseFloat(it.total) || (qty * price);
+                                itemSubtotal += itemTotal;
+                            }
+                        }
+                        const discountAmount = Math.max(0, itemSubtotal - Math.abs(netTotal));
+                        const showDiscount = discountAmount > 0.009 && !isRefund;
+                        
+                        return `<div class="receipt-block">
+                            <div class="receipt-title">
+                                Invoice #${escapeHtml(invoiceId)} ${isRefund ? '<span class="refund-badge">REFUND / CREDIT NOTE</span>' : ''}
+                            </div>
+                            <div class="receipt-meta">
+                                <div><strong>📅 Date/Time</strong>${escapeHtml(dateTime)}</div>
+                                <div><strong>👤 Staff</strong>${escapeHtml(employee)}</div>
+                                <div><strong>💰 Total (RM)</strong>${totalAmount}</div>
+                            </div>
+                            ${itemsList.length ? `
+                            <table class="items-table">
+                                <thead><tr><th>Item</th><th>Qty</th><th>Unit Price (RM)</th><th>Subtotal (RM)</th></tr></thead>
+                                <tbody>
+                                ${itemsList.map(it => {
+                                    const qty = it.quantity || 0;
+                                    const price = it.price || 0;
+                                    const subtotal = it.total || (qty * price);
+                                    return `<tr>
+                                        <td>${escapeHtml(it.item_name || it.name || 'Item')}</td>
+                                        <td>${qty}X${price.toFixed(2)}</td>
+                                        <td>${price.toFixed(2)}</td>
+                                        <td>${subtotal.toFixed(2)}</td>
+                                    </tr>`;
+                                }).join('')}
+                                ${showDiscount ? `<tr class="discount-row"><td colspan="3"><strong>🌟 Customer Points Discount</strong></td><td><strong>-RM ${discountAmount.toFixed(2)}</strong></td></tr>` : ''}
+                                </tbody>
+                            </table>
+                            ` : '<div style="padding:16px; background:#fef5e7; border-radius:16px;">No line items recorded</div>'}
+                            <div class="total-line">Total: RM ${totalAmount} ${isRefund ? '(Refund)' : ''}</div>
+                        </div>`;
+                    }).join('')}
+                    <div class="grand-total">🏁 GRAND TOTAL (All invoices): RM ${grandTotal.toFixed(2)}</div>
+                    <div class="footer-note">End of IRS Report — ${receipts.length} transactions</div>
+                </div>
+                </body></html>`;
+            }
+            
+            async function generateIrsReceiptPDF() {
+                const customDiv = document.getElementById('irsCustomRange');
+                if (customDiv && customDiv.style.display === 'block') {
+                    const fromInput = document.getElementById('irsFromDate').value;
+                    const toInput = document.getElementById('irsToDate').value;
+                    if (fromInput && toInput) {
+                        irsFromDate = fromInput;
+                        irsToDate = toInput;
+                        currentIrsPreset = 'custom';
+                    }
+                }
+                if (!irsFromDate || !irsToDate) {
+                    showError("Please select a valid date range");
+                    return;
+                }
+                const selectedStore = currentIrsStore;
+                const selectedEmployeeId = irsEmployeeSelect.value;
+                let selectedEmployeeName = null;
+                if (selectedEmployeeId !== 'all') {
+                    const emp = allEmployeesList.find(e => e.id == selectedEmployeeId);
+                    selectedEmployeeName = emp ? emp.name : null;
+                }
+                const loadingDiv = document.createElement('div');
+                loadingDiv.className = 'loading-toast';
+                loadingDiv.innerText = `Fetching IRS receipts ${irsFromDate} → ${irsToDate} ...`;
+                document.body.appendChild(loadingDiv);
+                try {
+                    const url = `${POS_BACKEND_URL}?action=getIrsReceipts&store=${selectedStore}&from=${irsFromDate}&to=${irsToDate}&employeeId=${selectedEmployeeId === 'all' ? 'all' : selectedEmployeeId}`;
+                    const response = await fetch(url);
+                    const result = await response.json();
+                    if (!result.success || !result.receipts) throw new Error("No IRS receipt data");
+                    let receipts = result.receipts;
+                    if (selectedEmployeeName) {
+                        receipts = receipts.filter(r => r.employee_name === selectedEmployeeName);
+                    }
+                    if (receipts.length === 0) throw new Error("No IRS receipts found for given criteria");
+                    receipts.sort((a,b) => (a.timestamp || '').localeCompare(b.timestamp || ''));
+                    const grandTotal = receipts.reduce((sum, rec) => sum + (rec.total || 0), 0);
+                    const storeDisplayName = selectedStore === 'all' ? 'ALL STORES' : currentIrsStoreName;
+                    const htmlContent = buildIrsReceiptsHtml(receipts, storeDisplayName, irsFromDate, irsToDate, selectedEmployeeName, grandTotal);
+                    const printWindow = window.open('', '_blank');
+                    printWindow.document.write(htmlContent);
+                    printWindow.document.close();
+                    printWindow.focus();
+                    printWindow.print();
+                } catch(err) {
+                    showError("IRS PDF failed: " + err.message);
+                } finally {
+                    loadingDiv.remove();
+                }
+            }
+            
+            // ----- Event Listeners for Receipts -----
+            function openReceiptChoiceModal() { receiptChoiceModal.classList.add('active'); }
+            function closeChoiceModalFunc() { receiptChoiceModal.classList.remove('active'); }
+            receiptPdfBtn.addEventListener('click', openReceiptChoiceModal);
+            closeChoiceModal.addEventListener('click', closeChoiceModalFunc);
+            receiptChoiceModal.addEventListener('click', (e) => { if(e.target === receiptChoiceModal) closeChoiceModalFunc(); });
+            
+            choiceStandard.addEventListener('click', () => {
+                closeChoiceModalFunc();
+                populateReceiptEmployeeDropdown();
+                setReceiptPreset('today');
+                receiptStoreLabelSpan.innerText = currentReceiptStoreName;
+                receiptPdfModal.classList.add('active');
+            });
+            
+            choiceIRS.addEventListener('click', () => {
+                closeChoiceModalFunc();
+                populateIrsEmployeeDropdown();
+                setIrsPreset('today');
+                irsStoreLabelSpan.innerText = currentIrsStoreName;
+                irsReceiptModal.classList.add('active');
+            });
+            
+            closeReceiptModal.addEventListener('click', () => receiptPdfModal.classList.remove('active'));
+            receiptPdfModal.addEventListener('click', (e) => { if(e.target === receiptPdfModal) receiptPdfModal.classList.remove('active'); });
+            receiptStoreOptionTrigger.addEventListener('click', () => { receiptStoreSelectorPanel.style.display = receiptStoreSelectorPanel.style.display === 'none' ? 'block' : 'none'; });
+            document.querySelectorAll('.receipt-store-item').forEach(el => {
+                el.addEventListener('click', () => {
+                    const storeVal = el.getAttribute('data-receipt-store');
+                    const storeNameMap = { all:'All Stores', queens:'Queensbay Mall', sunshine:'Sunshine Central', gurney_paragon:'Gurney Paragon' };
+                    currentReceiptStore = storeVal;
+                    currentReceiptStoreName = storeNameMap[storeVal];
+                    receiptStoreLabelSpan.innerText = currentReceiptStoreName;
+                    receiptStoreSelectorPanel.style.display = 'none';
+                });
+            });
+            document.querySelectorAll('[data-receipt-preset]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const preset = btn.getAttribute('data-receipt-preset');
+                    if(preset === 'custom') { setReceiptPreset('custom'); document.getElementById('receiptCustomRange').style.display = 'block'; }
+                    else setReceiptPreset(preset);
+                });
+            });
+            generateReceiptPdfBtn.addEventListener('click', generateReceiptPDF);
+            
+            closeIrsModal.addEventListener('click', () => irsReceiptModal.classList.remove('active'));
+            irsReceiptModal.addEventListener('click', (e) => { if(e.target === irsReceiptModal) irsReceiptModal.classList.remove('active'); });
+            irsStoreOptionTrigger.addEventListener('click', () => { irsStoreSelectorPanel.style.display = irsStoreSelectorPanel.style.display === 'none' ? 'block' : 'none'; });
+            document.querySelectorAll('.irs-store-item').forEach(el => {
+                el.addEventListener('click', () => {
+                    const storeVal = el.getAttribute('data-irs-store');
+                    const storeNameMap = { all:'All Stores', queens:'Queensbay Mall', sunshine:'Sunshine Central', gurney_paragon:'Gurney Paragon' };
+                    currentIrsStore = storeVal;
+                    currentIrsStoreName = storeNameMap[storeVal];
+                    irsStoreLabelSpan.innerText = currentIrsStoreName;
+                    irsStoreSelectorPanel.style.display = 'none';
+                });
+            });
+            document.querySelectorAll('[data-irs-preset]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const preset = btn.getAttribute('data-irs-preset');
+                    if(preset === 'custom') { setIrsPreset('custom'); document.getElementById('irsCustomRange').style.display = 'block'; }
+                    else setIrsPreset(preset);
+                });
+            });
+            generateIrsPdfBtn.addEventListener('click', generateIrsReceiptPDF);
+            
+            // ----- Original UI wiring -----
             downloadReportBtn.addEventListener('click', openReportModal);
             closeReportModalBtn.addEventListener('click', closeReportDownloadModal);
             generateReportBtn.addEventListener('click', generateCSVReport);
-            document.querySelectorAll('[data-report-preset]').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    const preset = btn.getAttribute('data-report-preset');
-                    setReportPreset(preset);
-                });
-            });
+            document.querySelectorAll('[data-report-preset]').forEach(btn => { btn.addEventListener('click', () => { const preset = btn.getAttribute('data-report-preset'); setReportPreset(preset); }); });
             reportModal.addEventListener('click', (e) => { if (e.target === reportModal) closeReportDownloadModal(); });
             
-            // Existing modal logic
             const storeModal = document.getElementById('storeModal');
             const dateModal = document.getElementById('dateModal');
             function openStoreModal() { storeModal.classList.add('active'); }
@@ -911,14 +1234,7 @@
             function closeDateModal() { dateModal.classList.remove('active'); }
             function selectStore(storeKey, name) { currentStore = storeKey; currentStoreDisplay = name; storeNameSpan.innerText = name; closeStoreModal(); hasData = false; lastLoadedStore = ""; refreshDashboard(); }
             function selectDatePreset(p) { if (p === 'custom') { document.getElementById('customDateRange').style.display = 'block'; return; } applyPreset(p); closeDateModal(); }
-            function applyCustomRange() {
-                const from = document.getElementById('customFromDate').value, to = document.getElementById('customToDate').value;
-                if (!from || !to) { showError("Select both dates"); return; }
-                if (from > to) { showError("Invalid range"); return; }
-                if (isFutureDate(from)) { showError("Cannot select future start date."); return; }
-                applyPreset('custom', from, to);
-                closeDateModal();
-            }
+            function applyCustomRange() { const from = document.getElementById('customFromDate').value, to = document.getElementById('customToDate').value; if (!from || !to) { showError("Select both dates"); return; } if (from > to) { showError("Invalid range"); return; } if (isFutureDate(from)) { showError("Cannot select future start date."); return; } applyPreset('custom', from, to); closeDateModal(); }
             
             refreshBtn.addEventListener('click', refreshDashboard);
             leftArrowBtn.addEventListener('click', () => shiftDateRange('left'));
@@ -928,24 +1244,14 @@
             document.getElementById('closeStoreModal')?.addEventListener('click', closeStoreModal);
             document.getElementById('closeDateModal')?.addEventListener('click', closeDateModal);
             document.querySelectorAll('#storeModal .store-option').forEach(opt => opt.addEventListener('click', () => selectStore(opt.dataset.store, opt.dataset.name)));
-            document.querySelectorAll('#dateModal .preset-option').forEach(opt => {
-                if (opt.dataset.preset !== 'custom') opt.addEventListener('click', () => selectDatePreset(opt.dataset.preset));
-                else opt.addEventListener('click', () => selectDatePreset('custom'));
-            });
+            document.querySelectorAll('#dateModal .preset-option').forEach(opt => { if (opt.dataset.preset !== 'custom') opt.addEventListener('click', () => selectDatePreset(opt.dataset.preset)); else opt.addEventListener('click', () => selectDatePreset('custom')); });
             document.getElementById('applyCustomBtn')?.addEventListener('click', applyCustomRange);
             if (storeModal) storeModal.addEventListener('click', (e) => { if (e.target === storeModal) closeStoreModal(); });
             if (dateModal) dateModal.addEventListener('click', (e) => { if (e.target === dateModal) closeDateModal(); });
             
-            document.querySelectorAll('.toggle-btn').forEach(btn => btn.addEventListener('click', () => {
-                document.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
-                btn.classList.add('active');
-                currentChartType = btn.getAttribute('data-chart-type');
-                if (lastChartResponseData) renderChartWithData(lastChartResponseData);
-                else if (trendChart && trendChart.data) renderChartWithData({ salesByDay: { labels: trendChart.data.labels, data: trendChart.data.datasets[0].data } });
-            }));
+            document.querySelectorAll('.toggle-btn').forEach(btn => btn.addEventListener('click', () => { document.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active')); btn.classList.add('active'); currentChartType = btn.getAttribute('data-chart-type'); if (lastChartResponseData) renderChartWithData(lastChartResponseData); else if (trendChart && trendChart.data) renderChartWithData({ salesByDay: { labels: trendChart.data.labels, data: trendChart.data.datasets[0].data } }); }));
             
             fetchAllEmployees();
-            
             const todayNow = new Date();
             currentPresetType = 'day';
             currentDayDate = new Date(todayNow);
