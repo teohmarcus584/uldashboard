@@ -1101,56 +1101,79 @@
             }
             
             async function generateIrsReceiptPDF() {
-                const customDiv = document.getElementById('irsCustomRange');
-                if (customDiv && customDiv.style.display === 'block') {
-                    const fromInput = document.getElementById('irsFromDate').value;
-                    const toInput = document.getElementById('irsToDate').value;
-                    if (fromInput && toInput) {
-                        irsFromDate = fromInput;
-                        irsToDate = toInput;
-                        currentIrsPreset = 'custom';
-                    }
-                }
-                if (!irsFromDate || !irsToDate) {
-                    showError("Please select a valid date range");
-                    return;
-                }
-                const selectedStore = currentIrsStore;
-                const selectedEmployeeId = irsEmployeeSelect.value;
-                let selectedEmployeeName = null;
-                if (selectedEmployeeId !== 'all') {
-                    const emp = allEmployeesList.find(e => e.id == selectedEmployeeId);
-                    selectedEmployeeName = emp ? emp.name : null;
-                }
-                const loadingDiv = document.createElement('div');
-                loadingDiv.className = 'loading-toast';
-                loadingDiv.innerText = `Fetching IRS receipts ${irsFromDate} → ${irsToDate} ...`;
-                document.body.appendChild(loadingDiv);
-                try {
-                    const url = `${POS_BACKEND_URL}?action=getIrsReceipts&store=${selectedStore}&from=${irsFromDate}&to=${irsToDate}&employeeId=${selectedEmployeeId === 'all' ? 'all' : selectedEmployeeId}`;
-                    const response = await fetch(url);
-                    const result = await response.json();
-                    if (!result.success || !result.receipts) throw new Error("No IRS receipt data");
-                    let receipts = result.receipts;
-                    if (selectedEmployeeName) {
-                        receipts = receipts.filter(r => r.employee_name === selectedEmployeeName);
-                    }
-                    if (receipts.length === 0) throw new Error("No IRS receipts found for given criteria");
-                    receipts.sort((a,b) => (a.timestamp || '').localeCompare(b.timestamp || ''));
-                    const grandTotal = receipts.reduce((sum, rec) => sum + (rec.total || 0), 0);
-                    const storeDisplayName = selectedStore === 'all' ? 'ALL STORES' : currentIrsStoreName;
-                    const htmlContent = buildIrsReceiptsHtml(receipts, storeDisplayName, irsFromDate, irsToDate, selectedEmployeeName, grandTotal);
-                    const printWindow = window.open('', '_blank');
-                    printWindow.document.write(htmlContent);
-                    printWindow.document.close();
-                    printWindow.focus();
-                    printWindow.print();
-                } catch(err) {
-                    showError("IRS PDF failed: " + err.message);
-                } finally {
-                    loadingDiv.remove();
-                }
-            }
+    // Read custom date inputs if the custom range div is visible
+    const customDiv = document.getElementById('irsCustomRange');
+    if (customDiv && customDiv.style.display === 'block') {
+        const fromInput = document.getElementById('irsFromDate').value;
+        const toInput = document.getElementById('irsToDate').value;
+        if (fromInput && toInput) {
+            irsFromDate = fromInput;
+            irsToDate = toInput;
+            currentIrsPreset = 'custom';
+        }
+    }
+    if (!irsFromDate || !irsToDate) {
+        showError("Please select a valid date range");
+        return;
+    }
+    const selectedStore = currentIrsStore;
+    const selectedEmployeeId = irsEmployeeSelect.value;
+    let selectedEmployeeName = null;
+    if (selectedEmployeeId !== 'all') {
+        const emp = allEmployeesList.find(e => e.id == selectedEmployeeId);
+        selectedEmployeeName = emp ? emp.name : null;
+    }
+    const loadingDiv = document.createElement('div');
+    loadingDiv.className = 'loading-toast';
+    loadingDiv.innerText = `Fetching IRS receipts ${irsFromDate} → ${irsToDate} ...`;
+    document.body.appendChild(loadingDiv);
+    try {
+        // Use standard getReceipts endpoint – it's guaranteed to exist
+        let url = `${POS_BACKEND_URL}?action=getReceipts&store=${selectedStore}&from=${irsFromDate}&to=${irsToDate}&employeeId=all`;
+        const response = await fetch(url);
+        const result = await response.json();
+        if (!result.success || !result.receipts) throw new Error("No receipt data from server");
+
+        let allReceipts = result.receipts;
+        
+        // --- FILTER for IRS: only Card and Alipay (adjust as needed) ---
+        let irsReceipts = allReceipts.filter(rec => {
+            const pm = (rec.payment_method || '').toLowerCase();
+            return pm === 'card' || pm === 'alipay';
+        });
+        
+        if (selectedEmployeeName) {
+            irsReceipts = irsReceipts.filter(r => 
+                (r.sales_person_name === selectedEmployeeName || r.employee_name === selectedEmployeeName)
+            );
+        }
+        
+        if (irsReceipts.length === 0) {
+            throw new Error("No Card/Alipay receipts found for the selected criteria.");
+        }
+        
+        irsReceipts.sort((a,b) => (a.timestamp || '').localeCompare(b.timestamp || ''));
+        
+        const grandTotal = irsReceipts.reduce((sum, rec) => sum + (parseFloat(rec.total) || 0), 0);
+        const storeDisplayName = selectedStore === 'all' ? 'ALL STORES' : currentIrsStoreName;
+        
+        const htmlContent = buildIrsReceiptsHtml(irsReceipts, storeDisplayName, irsFromDate, irsToDate, selectedEmployeeName, grandTotal);
+        const printWindow = window.open('', '_blank');
+        if (!printWindow) {
+            throw new Error("Popup blocked. Please allow popups for this site.");
+        }
+        printWindow.document.write(htmlContent);
+        printWindow.document.close();
+        printWindow.focus();
+        printWindow.print();
+        
+    } catch(err) {
+        console.error(err);
+        showError("IRS PDF failed: " + err.message);
+    } finally {
+        loadingDiv.remove();
+    }
+}
             
             // ----- Event Listeners for Receipts -----
             function openReceiptChoiceModal() { receiptChoiceModal.classList.add('active'); }
