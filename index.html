@@ -866,57 +866,159 @@
             }
             
             function buildReceiptsHtml(receipts, storeName, fromDate, toDate, employeeFilter) {
-                return `<!DOCTYPE html>
-                <html>
-                <head><meta charset="UTF-8"><title>Receipts_${fromDate}_to_${toDate}</title>
-                <style>
-                    body { font-family: 'Inter', 'Segoe UI', sans-serif; margin: 20px; background: white; }
-                    .print-header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #2b6e9e; padding-bottom: 12px; }
-                    .store-title { font-size: 28px; font-weight: 800; }
-                    .range-info { color: #2d3748; margin-top: 6px; }
-                    .employee-note { background: #f0f4f8; display: inline-block; padding: 4px 12px; border-radius: 40px; font-size: 12px; margin-top: 8px; }
-                    .receipt-block { page-break-inside: avoid; margin-bottom: 32px; border: 1px solid #e2e8f0; border-radius: 20px; padding: 16px; background: #ffffff; break-inside: avoid; }
-                    .receipt-title { font-weight: 800; font-size: 18px; border-left: 5px solid #2b6e9e; padding-left: 12px; margin-bottom: 12px; }
-                    .receipt-meta { display: flex; flex-wrap: wrap; gap: 18px; background: #f9fbfd; padding: 12px; border-radius: 16px; margin-bottom: 16px; font-size: 13px; }
-                    .receipt-meta strong { min-width: 80px; display: inline-block; }
-                    .items-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 12px; }
-                    .items-table th, .items-table td { border: 1px solid #cbd5e0; padding: 8px; text-align: left; }
-                    .items-table th { background: #edf2f7; }
-                    .refund-badge { background: #fed7d7; color: #9b2c2c; padding: 2px 8px; border-radius: 30px; font-size: 10px; font-weight: bold; }
-                    .total-line { text-align: right; margin-top: 12px; font-weight: 800; font-size: 16px; }
-                </style>
-                </head>
-                <body>
-                <div class="print-header">
-                    <div class="store-title">🧾 RECEIPT DETAILS REPORT</div>
-                    <div class="store-title" style="font-size:18px;">${escapeHtml(storeName)}</div>
-                    <div class="range-info">Period: ${escapeHtml(fromDate)} → ${escapeHtml(toDate)}</div>
-                    ${employeeFilter ? `<div class="employee-note">👤 Employee: ${escapeHtml(employeeFilter)}</div>` : ''}
-                    <div style="margin-top:8px; font-size:12px;">Generated on ${new Date().toLocaleString()}</div>
-                </div>
-                ${receipts.map((rec, idx) => {
-                    const isRefund = rec.total < 0 || rec.is_refund === true;
-                    const receiptId = rec.transaction_id || rec.id || `TXN-${idx}`;
-                    const dateTime = rec.timestamp ? new Date(rec.timestamp).toLocaleString() : 'N/A';
-                    const employee = rec.sales_person_name || rec.employee_name || '—';
-                    const payment = rec.payment_method || rec.payment_type || '—';
-                    const itemsList = rec.items && rec.items.length ? rec.items : (rec.item_name ? [{ item_name: rec.item_name, quantity: rec.quantity || 1, total: rec.total, price: rec.price }] : []);
-                    return `<div class="receipt-block">
-                        <div class="receipt-title">Receipt #${escapeHtml(receiptId)} ${isRefund ? '<span class="refund-badge">REFUND / CREDIT NOTE</span>' : ''}</div>
-                        <div class="receipt-meta">
-                            <div><strong>📅 Date/Time</strong><br>${escapeHtml(dateTime)}</div>
-                            <div><strong>👤 Staff</strong><br>${escapeHtml(employee)}</div>
-                            <div><strong>💳 Payment</strong><br>${escapeHtml(payment)}</div>
-                            <div><strong>💰 Total (RM)</strong><br><span style="font-weight:800;">${(rec.total || 0).toFixed(2)}</span></div>
-                        </div>
-                        ${itemsList.length ? `<table class="items-table"><thead><tr><th>Item</th><th>Qty</th><th>Unit Price (RM)</th><th>Subtotal (RM)</th></tr></thead><tbody>
-                        ${itemsList.map(it => `<tr><td>${escapeHtml(it.item_name || it.name || 'Item')}</td><td>${it.quantity || 0}</td><td>${(it.price || 0).toFixed(2)}</td><td>${(it.total || 0).toFixed(2)}</td>`).join('')}
-                        </tbody></table>` : '<div style="padding:8px; background:#fef5e7;">No line items recorded</div>'}
-                        ${rec.total !== undefined ? `<div class="total-line">Grand Total: RM ${Math.abs(rec.total).toFixed(2)} ${rec.total < 0 ? '(Refund)' : ''}</div>` : ''}
-                    </div>`}).join('')}
-                <div style="text-align:center; margin-top: 40px; font-size: 10px; color: gray;">End of Receipts Report — ${receipts.length} transactions</div>
-                </body></html>`;
-            }
+    return `<!DOCTYPE html>
+    <html>
+    <head><meta charset="UTF-8"><title>Receipts_${fromDate}_to_${toDate}</title>
+    <style>
+        body {
+            font-family: 'Courier New', 'Fira Code', monospace;
+            margin: 20px;
+            background: white;
+            font-size: 12px;
+            line-height: 1.4;
+        }
+        .print-header {
+            text-align: center;
+            margin-bottom: 30px;
+            border-bottom: 1px dashed #aaa;
+            padding-bottom: 12px;
+        }
+        .store-title {
+            font-size: 20px;
+            font-weight: bold;
+        }
+        .range-info {
+            color: #2d3748;
+            margin-top: 6px;
+        }
+        .employee-note {
+            background: #f0f4f8;
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 40px;
+            font-size: 11px;
+            margin-top: 8px;
+        }
+        .receipt-block {
+            page-break-inside: avoid;
+            margin-bottom: 32px;
+            border: 1px solid #ccc;
+            padding: 16px;
+            background: #ffffff;
+            break-inside: avoid;
+            border-radius: 0;
+            font-family: monospace;
+        }
+        .receipt-title {
+            font-weight: bold;
+            font-size: 14px;
+            margin-bottom: 8px;
+        }
+        .receipt-meta {
+            margin: 12px 0;
+            line-height: 1.6;
+        }
+        .receipt-meta div {
+            margin: 4px 0;
+        }
+        .items-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 12px 0;
+            font-size: 11px;
+        }
+        .items-table th, .items-table td {
+            border: 1px solid #ccc;
+            padding: 6px 4px;
+            text-align: left;
+            vertical-align: top;
+        }
+        .items-table th {
+            background: #f1f1f1;
+            font-weight: bold;
+        }
+        .total-line {
+            text-align: right;
+            margin-top: 8px;
+            font-weight: bold;
+            font-size: 13px;
+            border-top: 1px dashed #aaa;
+            padding-top: 6px;
+        }
+        .refund-badge {
+            background: #fee;
+            color: #c00;
+            padding: 2px 6px;
+            font-size: 10px;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+        .grand-total {
+            margin-top: 20px;
+            text-align: right;
+            font-weight: bold;
+            font-size: 14px;
+        }
+    </style>
+    </head>
+    <body>
+    <div class="print-header">
+        <div class="store-title">🧾 RECEIPT DETAILS REPORT</div>
+        <div class="store-title" style="font-size:14px;">${escapeHtml(storeName)}</div>
+        <div class="range-info">Period: ${escapeHtml(fromDate)} → ${escapeHtml(toDate)}</div>
+        ${employeeFilter ? `<div class="employee-note">👤 Employee: ${escapeHtml(employeeFilter)}</div>` : ''}
+        <div style="margin-top:8px; font-size:10px;">Generated on ${new Date().toLocaleString()}</div>
+    </div>
+    ${receipts.map((rec, idx) => {
+        const isRefund = rec.total < 0 || rec.is_refund === true;
+        const receiptId = rec.transaction_id || rec.id || `TXN-${idx}`;
+        const dateTime = rec.timestamp ? new Date(rec.timestamp).toLocaleString() : 'N/A';
+        const employee = rec.sales_person_name || rec.employee_name || '—';
+        const totalAmount = Math.abs(rec.total || 0).toFixed(2);
+        const itemsList = rec.items && rec.items.length ? rec.items : (rec.item_name ? [{ item_name: rec.item_name, quantity: rec.quantity || 1, total: rec.total, price: rec.price }] : []);
+        
+        return `<div class="receipt-block">
+            <div class="receipt-title">
+                Invoice #${escapeHtml(receiptId)} ${isRefund ? '<span class="refund-badge">REFUND</span>' : ''}
+            </div>
+            <div class="receipt-meta">
+                <div>📅 Date/Time: ${escapeHtml(dateTime)}</div>
+                <div>👤 Employee: ${escapeHtml(employee)}</div>
+                <div>💰 Total (RM): ${totalAmount}</div>
+            </div>
+            <div>&nbsp;</div>
+            ${itemsList.length ? `
+            <table class="items-table">
+                <thead>
+                    <tr>
+                        <th>Item</th>
+                        <th>Qty</th>
+                        <th>Unit Price (RM)</th>
+                        <th>Subtotal (RM)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                ${itemsList.map(it => {
+                    const qty = it.quantity || 0;
+                    const price = it.price || 0;
+                    const subtotal = it.total || (qty * price);
+                    const qtyFormatted = `${qty}X${price.toFixed(2)}`;
+                    return `<tr>
+                        <td>${escapeHtml(it.item_name || it.name || 'Item')}</td>
+                        <td>${qtyFormatted}</td>
+                        <td>${price.toFixed(2)}</td>
+                        <td>${subtotal.toFixed(2)}</td>
+                    </tr>`;
+                }).join('')}
+                </tbody>
+            </table>
+            ` : '<div style="padding:8px; background:#fef5e7;">No line items recorded</div>'}
+            <div class="total-line">Total: RM ${totalAmount} ${isRefund ? '(Refund)' : ''}</div>
+        </div>`;
+    }).join('')}
+    <div style="text-align:center; margin-top: 40px; font-size: 10px; color: gray;">End of Receipts Report — ${receipts.length} transactions</div>
+    </body></html>`;
+}
             
             // ---------- NEW: IRS Receipt PDF ----------
             let currentIrsStore = "queens";
@@ -1043,60 +1145,70 @@
     }
 }
             
-          function buildIrsReceiptsHtml(receipts, storeName, fromDate, toDate, employeeFilter, grandTotal) {
+         function buildIrsReceiptsHtml(receipts, storeName, fromDate, toDate, employeeFilter, grandTotal) {
     return `<!DOCTYPE html>
     <html>
     <head><meta charset="UTF-8"><title>IRS_Report_${fromDate}_to_${toDate}</title>
     <style>
-        body { font-family: 'Inter', 'Segoe UI', sans-serif; margin: 20px; background: white; }
-        .print-header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #2b6e9e; padding-bottom: 12px; }
-        .store-title { font-size: 28px; font-weight: 800; }
+        body { font-family: 'Courier New', monospace; margin: 20px; background: white; font-size: 12px; }
+        .print-header { text-align: center; margin-bottom: 30px; border-bottom: 1px dashed #aaa; padding-bottom: 12px; }
+        .store-title { font-size: 20px; font-weight: bold; }
         .range-info { color: #2d3748; margin-top: 6px; }
-        .employee-note { background: #f0f4f8; display: inline-block; padding: 4px 12px; border-radius: 40px; font-size: 12px; margin-top: 8px; }
-        .receipt-block { page-break-inside: avoid; margin-bottom: 32px; border: 1px solid #e2e8f0; border-radius: 20px; padding: 16px; background: #ffffff; break-inside: avoid; }
-        .receipt-title { font-weight: 800; font-size: 18px; border-left: 5px solid #e67e22; padding-left: 12px; margin-bottom: 12px; }
-        .refund-badge { background: #fed7d7; color: #9b2c2c; padding: 2px 8px; border-radius: 30px; font-size: 12px; font-weight: bold; margin-left: 10px; }
-        .receipt-meta { display: flex; flex-wrap: wrap; gap: 18px; background: #f9fbfd; padding: 12px; border-radius: 16px; margin-bottom: 16px; font-size: 13px; }
-        .receipt-meta strong { min-width: 100px; display: inline-block; }
-        .items-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 12px; }
-        .items-table th, .items-table td { border: 1px solid #cbd5e0; padding: 8px; text-align: left; }
-        .items-table th { background: #edf2f7; }
-        .total-line { text-align: right; margin-top: 12px; font-weight: 800; font-size: 16px; }
-        .refund-total { color: #b91c1c; }
-        .grand-total { margin-top: 30px; padding-top: 12px; border-top: 2px solid #e67e22; text-align: right; font-size: 18px; font-weight: 800; }
+        .employee-note { background: #f0f4f8; display: inline-block; padding: 4px 12px; border-radius: 40px; font-size: 11px; margin-top: 8px; }
+        .receipt-block { page-break-inside: avoid; margin-bottom: 32px; border: 1px solid #ccc; padding: 16px; background: #ffffff; break-inside: avoid; }
+        .receipt-title { font-weight: bold; font-size: 14px; margin-bottom: 8px; }
+        .receipt-meta { margin: 12px 0; line-height: 1.6; }
+        .items-table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 11px; }
+        .items-table th, .items-table td { border: 1px solid #ccc; padding: 6px 4px; text-align: left; }
+        .items-table th { background: #f1f1f1; }
+        .total-line { text-align: right; margin-top: 8px; font-weight: bold; border-top: 1px dashed #aaa; padding-top: 6px; }
+        .refund-badge { background: #fee; color: #c00; padding: 2px 6px; font-size: 10px; margin-left: 10px; }
+        .grand-total { margin-top: 20px; text-align: right; font-weight: bold; font-size: 14px; }
     </style>
     </head>
     <body>
     <div class="print-header">
         <div class="store-title">🏦 IRS REPORTING RECEIPTS</div>
-        <div class="store-title" style="font-size:18px;">${escapeHtml(storeName)}</div>
+        <div class="store-title" style="font-size:14px;">${escapeHtml(storeName)}</div>
         <div class="range-info">Period: ${escapeHtml(fromDate)} → ${escapeHtml(toDate)}</div>
         ${employeeFilter ? `<div class="employee-note">👤 Employee: ${escapeHtml(employeeFilter)}</div>` : ''}
-        <div style="margin-top:8px; font-size:12px;">Generated on ${new Date().toLocaleString()}</div>
+        <div style="margin-top:8px; font-size:10px;">Generated on ${new Date().toLocaleString()}</div>
     </div>
     ${receipts.map((rec, idx) => {
         const isRefund = rec.total < 0;
+        const invoiceId = rec.invoice_no || rec.transaction_id || `IRS-${idx}`;
         const dateTime = rec.timestamp ? new Date(rec.timestamp).toLocaleString() : 'N/A';
-        const employee = rec.employee_name || '—';
+        const employee = rec.employee_name || rec.sales_person_name || '—';
+        const totalAmount = Math.abs(rec.total || 0).toFixed(2);
         const itemsList = rec.items && rec.items.length ? rec.items : (rec.item_name ? [{ item_name: rec.item_name, quantity: rec.quantity || 1, total: rec.total, price: rec.price }] : []);
         return `<div class="receipt-block">
             <div class="receipt-title">
-                Invoice #${escapeHtml(rec.invoice_no)}
-                ${isRefund ? '<span class="refund-badge">REFUND / CREDIT NOTE</span>' : ''}
+                Invoice #${escapeHtml(invoiceId)} ${isRefund ? '<span class="refund-badge">REFUND</span>' : ''}
             </div>
             <div class="receipt-meta">
-                <div><strong>📅 Date/Time</strong><br>${escapeHtml(dateTime)}</div>
-                <div><strong>👤 Employee</strong><br>${escapeHtml(employee)}</div>
-                <div><strong>💰 Total (RM)</strong><br><span style="font-weight:800;">${Math.abs(rec.total).toFixed(2)}</span></div>
+                <div>📅 Date/Time: ${escapeHtml(dateTime)}</div>
+                <div>👤 Employee: ${escapeHtml(employee)}</div>
+                <div>💰 Total (RM): ${totalAmount}</div>
             </div>
-            ${itemsList.length ? `<table class="items-table"><thead><tr><th>Item</th><th>Qty</th><th>Unit Price (RM)</th><th>Subtotal (RM)</th></tr></thead><tbody>
-            ${itemsList.map(it => `<tr><tr>${escapeHtml(it.item_name || it.name || 'Item')}</td><td>${it.quantity || 0}</td><td>${(it.price || 0).toFixed(2)}</td><td class="${it.total < 0 ? 'refund-total' : ''}">${(it.total || 0).toFixed(2)}</td></tr>`).join('')}
-            </tbody></table>` : '<div style="padding:8px; background:#fef5e7;">No line items recorded</div>'}
-            <div class="total-line ${isRefund ? 'refund-total' : ''}">
-                ${isRefund ? `Refund Total: - RM ${Math.abs(rec.total).toFixed(2)}` : `Total: RM ${rec.total.toFixed(2)}`}
-            </div>
-        </div>`}).join('')}
-    <div class="grand-total">🏁 GRAND TOTAL: RM ${grandTotal.toFixed(2)}</div>
+            <div>&nbsp;</div>
+            ${itemsList.length ? `
+            <table class="items-table">
+                <thead><tr><th>Item</th><th>Qty</th><th>Unit Price (RM)</th><th>Subtotal (RM)</th></tr></thead>
+                <tbody>
+                ${itemsList.map(it => {
+                    const qty = it.quantity || 0;
+                    const price = it.price || 0;
+                    const subtotal = it.total || (qty * price);
+                    const qtyFormatted = `${qty}X${price.toFixed(2)}`;
+                    return `<tr><td>${escapeHtml(it.item_name || it.name || 'Item')}</td><td>${qtyFormatted}</td><td>${price.toFixed(2)}</td><td>${subtotal.toFixed(2)}</td></tr>`;
+                }).join('')}
+                </tbody>
+            </table>
+            ` : '<div style="padding:8px; background:#fef5e7;">No line items recorded</div>'}
+            <div class="total-line">Total: RM ${totalAmount} ${isRefund ? '(Refund)' : ''}</div>
+        </div>`;
+    }).join('')}
+    <div class="grand-total">🏁 GRAND TOTAL (All invoices): RM ${grandTotal.toFixed(2)}</div>
     <div style="text-align:center; margin-top: 40px; font-size: 10px; color: gray;">End of IRS Report — ${receipts.length} transactions</div>
     </body></html>`;
 }
