@@ -889,7 +889,9 @@
                     ${receipts.map((rec, idx) => {
                         const isRefund = rec.total < 0 || rec.is_refund === true;
                         const receiptId = rec.transaction_id || rec.id || `TXN-${idx}`;
-                        const dateTime = rec.timestamp ? new Date(rec.timestamp).toLocaleString() : 'N/A';
+                        const dateTime = rec.timestamp
+  ? new Date(rec.timestamp).toLocaleString('en-MY', { timeZone: 'Asia/Kuala_Lumpur' })
+  : 'N/A';
                         const employee = rec.sales_person_name || rec.employee_name || '—';
                         const totalAmount = Math.abs(rec.total || 0).toFixed(2);
                         const itemsList = rec.items && rec.items.length ? rec.items : (rec.item_name ? [{ item_name: rec.item_name, quantity: rec.quantity || 1, total: rec.total, price: rec.price }] : []);
@@ -1045,7 +1047,9 @@
                     ${receipts.map((rec, idx) => {
                         const isRefund = rec.total < 0;
                         const invoiceId = rec.invoice_no || rec.transaction_id || `IRS-${idx}`;
-                        const dateTime = rec.timestamp ? new Date(rec.timestamp).toLocaleString() : 'N/A';
+                        const dateTime = rec.timestamp
+  ? new Date(rec.timestamp).toLocaleString('en-MY', { timeZone: 'Asia/Kuala_Lumpur' })
+  : 'N/A';
                         const employee = rec.employee_name || rec.sales_person_name || '—';
                         const netTotal = parseFloat(rec.total) || 0;
                         const totalAmount = Math.abs(netTotal).toFixed(2);
