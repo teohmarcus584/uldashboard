@@ -1129,18 +1129,14 @@
     document.body.appendChild(loadingDiv);
     try {
         // Use standard getReceipts endpoint – it's guaranteed to exist
-        let url = `${POS_BACKEND_URL}?action=getReceipts&store=${selectedStore}&from=${irsFromDate}&to=${irsToDate}&employeeId=all`;
+        let url = `${POS_BACKEND_URL}?action=getIrsReceipts&store=${selectedStore}&from=${irsFromDate}&to=${irsToDate}&employeeId=${selectedEmployeeId || 'all'}`;
         const response = await fetch(url);
         const result = await response.json();
         if (!result.success || !result.receipts) throw new Error("No receipt data from server");
 
         let allReceipts = result.receipts;
         
-        // --- FILTER for IRS: only Card and Alipay (adjust as needed) ---
-        let irsReceipts = allReceipts.filter(rec => {
-            const pm = (rec.payment_method || '').toLowerCase();
-            return pm === 'card' || pm === 'alipay';
-        });
+        let irsReceipts = result.receipts;
         
         if (selectedEmployeeName) {
             irsReceipts = irsReceipts.filter(r => 
