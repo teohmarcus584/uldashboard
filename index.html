@@ -520,21 +520,45 @@ async function downloadFullProductList() {
         }
 
         console.log(`📊 Products with sales: ${salesResult.products ? salesResult.products.length : 0}`);
+        
+        // Debug: Log the first few sales products to see their IDs
+        if (salesResult.products && salesResult.products.length > 0) {
+            console.log('🔍 First 3 sales products:', salesResult.products.slice(0, 3));
+            console.log('🔍 First 3 product IDs from sales:', salesResult.products.slice(0, 3).map(p => p.id));
+        }
+        
+        // Debug: Log the first few all products to see their IDs
+        if (allProductsResult.products && allProductsResult.products.length > 0) {
+            console.log('🔍 First 3 all products:', allProductsResult.products.slice(0, 3));
+            console.log('🔍 First 3 product IDs from all:', allProductsResult.products.slice(0, 3).map(p => p.id));
+        }
 
-        // 3. Create a map of sales data by product ID
+        // 3. Create a map of sales data by product ID (convert to string for comparison)
         const salesMap = new Map();
         if (salesResult.products) {
             salesResult.products.forEach(p => {
-                salesMap.set(p.id, {
+                // 🔑 KEY FIX: Convert both to string for comparison
+                const id = String(p.id);
+                salesMap.set(id, {
                     quantity: p.quantity || 0,
                     total: p.total || 0
                 });
+                console.log(`📝 Sales map set: ${id} -> Qty: ${p.quantity}, Total: ${p.total}`);
             });
         }
 
+        console.log(`📝 Sales map size: ${salesMap.size}`);
+
         // 4. Merge: Use ALL products, add sales data if available
         const mergedProducts = allProductsResult.products.map(p => {
-            const salesData = salesMap.get(p.id);
+            // 🔑 KEY FIX: Convert product ID to string for comparison
+            const id = String(p.id);
+            const salesData = salesMap.get(id);
+            
+            if (salesData) {
+                console.log(`✅ Match found for product: ${p.name} (ID: ${id}) -> Qty: ${salesData.quantity}`);
+            }
+            
             return {
                 id: p.id,
                 name: p.name,
