@@ -612,54 +612,70 @@
             }
             
             function updateUI(data) {
-                const { sales, chart, products, employees } = data;
-                lastChartResponseData = chart;
-                document.getElementById('totalSales').innerText = formatMYR(sales.totalSales);
-                document.getElementById('txnCount').innerText = formatNumber(sales.transactionCount);
-                document.getElementById('itemsSold').innerText = formatNumber(sales.totalItems);
-                const avg = sales.transactionCount ? sales.totalSales / sales.transactionCount : 0;
-                document.getElementById('avgTicket').innerText = formatMYR(avg);
-                document.getElementById('cashAmount').innerText = formatMYR(sales.cashTotal);
-                document.getElementById('cardAmount').innerText = formatMYR(sales.cardTotal);
-                document.getElementById('alipayAmount').innerText = formatMYR(sales.alipayTotal);
-                document.getElementById('otherAmount').innerText = formatMYR(sales.otherTotal);
-                const refundPos = (sales.refundTotal || 0) * -1;
-                document.getElementById('refundAmount').innerText = formatMYR(refundPos > 0 ? refundPos : 0);
-                
-                const staffDiv = document.getElementById('staffSalesList');
-                if (!employees.labels || !employees.labels.length) { staffDiv.innerHTML = '<div>No staff sales data</div>'; }
-                else {
-                    let h = '<table class="mini-table"><thead><tr><th>Staff</th><th>Sales (RM)</th></tr></thead><tbody>';
-                    for (let i = 0; i < employees.labels.length; i++) h += `<tr><td><strong>${escapeHtml(employees.labels[i])}</strong></td><td>${formatMYR(employees.data[i])}</td></tr>`;
-                    h += '</tbody></table>';
-                    staffDiv.innerHTML = h;
-                }
-                
-                const catDiv = document.getElementById('categorySalesList');
-                if (!products.products || !products.products.length) { catDiv.innerHTML = '<div>No category data</div>'; }
-                else {
-                    const rev = new Map(), qty = new Map();
-                    products.products.forEach(p => { const c = p.category || 'Uncategorized'; rev.set(c, (rev.get(c) || 0) + p.total); qty.set(c, (qty.get(c) || 0) + (p.quantity || 0)); });
-                    const sorted = Array.from(rev.entries()).sort((a,b) => b[1] - a[1]);
-                    let h = '<table class="mini-table"><thead><tr><th>Category</th><th>Quantity Sold</th><th>Total Sales (RM)</th></tr></thead><tbody>';
-                    sorted.forEach(([c, amt]) => { h += `<tr><td><strong>${escapeHtml(c)}</strong></td><td>${formatNumber(qty.get(c))}</span></td><td>${formatMYR(amt)}</span></tr>`; });
-                    h += '</tbody></table>';
-                    catDiv.innerHTML = h;
-                }
-                
-                const prodDiv = document.getElementById('productsList');
-                if (!products.products || !products.products.length) { prodDiv.innerHTML = '<div>No product sales</div>'; }
-                else {
-                    const allProducts = [...products.products].sort((a,b) => (b.total || 0) - (a.total || 0));
-                    let h = '<table class="mini-table"><thead><tr><th>Product</th><th>Qty Sold</th><th>Revenue (RM)</th></tr></thead><tbody>';
-                    allProducts.forEach(p => { h += `<tr><td><strong>${escapeHtml(p.name || '')}</strong><br><span class="badge">${p.category || ''}</span></td><td>${formatNumber(p.quantity)}</span></td><td>${formatMYR(p.total)}</span></tr>`; });
-                    h += '</tbody></table>';
-                    prodDiv.innerHTML = h;
-                }
-                
-                renderChartWithData(chart);
-                hasData = true;
-            }
+    const { sales, chart, products, employees } = data;
+    lastChartResponseData = chart;
+    document.getElementById('totalSales').innerText = formatMYR(sales.totalSales);
+    document.getElementById('txnCount').innerText = formatNumber(sales.transactionCount);
+    document.getElementById('itemsSold').innerText = formatNumber(sales.totalItems);
+    const avg = sales.transactionCount ? sales.totalSales / sales.transactionCount : 0;
+    document.getElementById('avgTicket').innerText = formatMYR(avg);
+    document.getElementById('cashAmount').innerText = formatMYR(sales.cashTotal);
+    document.getElementById('cardAmount').innerText = formatMYR(sales.cardTotal);
+    document.getElementById('alipayAmount').innerText = formatMYR(sales.alipayTotal);
+    document.getElementById('otherAmount').innerText = formatMYR(sales.otherTotal);
+    const refundPos = (sales.refundTotal || 0) * -1;
+    document.getElementById('refundAmount').innerText = formatMYR(refundPos > 0 ? refundPos : 0);
+    
+    const staffDiv = document.getElementById('staffSalesList');
+    if (!employees.labels || !employees.labels.length) { staffDiv.innerHTML = '<div>No staff sales data</div>'; }
+    else {
+        let h = '<table class="mini-table"><thead><tr><th>Staff</th><th>Sales (RM)</th></tr></thead><tbody>';
+        for (let i = 0; i < employees.labels.length; i++) h += `<tr><td><strong>${escapeHtml(employees.labels[i])}</strong></td><td>${formatMYR(employees.data[i])}</td></tr>`;
+        h += '</tbody></table>';
+        staffDiv.innerHTML = h;
+    }
+    
+    // ========== REPLACED WITH FILTERED VERSION ==========
+    // --- CATEGORY SALES (NO REFUNDS) ---
+    const catDiv = document.getElementById('categorySalesList');
+    const validProducts = products.products ? products.products.filter(p => p.total >= 0 && p.quantity >= 0) : [];
+
+    if (!validProducts.length) { 
+        catDiv.innerHTML = '<div>No category data</div>'; 
+    } else {
+        const rev = new Map(), qty = new Map();
+        validProducts.forEach(p => { 
+            const c = p.category || 'Uncategorized'; 
+            rev.set(c, (rev.get(c) || 0) + (p.total > 0 ? p.total : 0)); 
+            qty.set(c, (qty.get(c) || 0) + (p.quantity > 0 ? p.quantity : 0)); 
+        });
+        const sorted = Array.from(rev.entries()).sort((a,b) => b[1] - a[1]);
+        let h = '<table class="mini-table"><thead><tr><th>Category</th><th>Quantity Sold</th><th>Total Sales (RM)</th></tr></thead><tbody>';
+        sorted.forEach(([c, amt]) => { 
+            h += `<tr><td><strong>${escapeHtml(c)}</strong></td><td>${formatNumber(qty.get(c))}</td><td>${formatMYR(amt)}</td></tr>`; 
+        });
+        h += '</tbody></table>';
+        catDiv.innerHTML = h;
+    }
+
+    // --- TOP PRODUCTS (NO REFUNDS) ---
+    const prodDiv = document.getElementById('productsList');
+    if (!validProducts.length) { 
+        prodDiv.innerHTML = '<div>No product sales</div>'; 
+    } else {
+        const allProducts = [...validProducts].sort((a,b) => (b.total || 0) - (a.total || 0));
+        let h = '<table class="mini-table"><thead><tr><th>Product</th><th>Qty Sold</th><th>Revenue (RM)</th></tr></thead><tbody>';
+        allProducts.forEach(p => { 
+            h += `<tr><td><strong>${escapeHtml(p.name || '')}</strong><br><span class="badge">${p.category || ''}</span></td><td>${formatNumber(p.quantity)}</td><td>${formatMYR(p.total)}</td></tr>`; 
+        });
+        h += '</tbody></table>';
+        prodDiv.innerHTML = h;
+    }
+    // ========== END OF REPLACED SECTION ==========
+    
+    renderChartWithData(chart);
+    hasData = true;
+}
             
             async function refreshDashboard() {
                 if (refreshInProgress && currentAbortController) { currentAbortController.abort(); refreshBtn.classList.remove('refresh-spin'); refreshInProgress = false; }
