@@ -163,8 +163,33 @@
     </div>
     <div class="section-card"><div class="section-title">💵 Payment Breakdown</div><div class="payment-breakdown"><div class="payment-item"><div class="payment-method">Cash</div><div class="payment-amount" id="cashAmount">—</div></div><div class="payment-item"><div class="payment-method">Card</div><div class="payment-amount" id="cardAmount">—</div></div><div class="payment-item"><div class="payment-method">Alipay</div><div class="payment-amount" id="alipayAmount">—</div></div><div class="payment-item"><div class="payment-method">TnG</div><div class="payment-amount" id="otherAmount">—</div></div><div class="payment-item"><div class="payment-method">Refunds</div><div class="payment-amount" id="refundAmount">—</div></div></div></div>
     <div class="section-card"><div class="chart-header"><div class="section-title" style="margin-bottom:0; border-left: none;">📈 Sales Trend</div><div class="toggle-group" id="chartToggleGroup"><button class="toggle-btn active" data-chart-type="line">Line</button><button class="toggle-btn" data-chart-type="bar">Bar</button></div></div><canvas id="trendChart"></canvas></div>
-    <div class="section-card"><div class="section-title">🏆 Top Products (all items - full list)</div><div id="productsList" class="product-table-container">Loading...</div><div class="note">* Amounts shown are after all discounts (promotions, buy-X-free-Y, staff discounts).</div></div>
-    <div class="section-card"><div class="section-title">📊 Sales by Category</div><div id="categorySalesList">Loading...</div><div class="note">* Category totals also reflect discounted revenue.</div></div>
+    
+    <!-- ========== TOP PRODUCTS SECTION - FIXED ========== -->
+    <div class="section-card">
+        <div class="section-title" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+            <span style="border-left: 5px solid #2b6e9e; padding-left: 14px;">🏆 Top Products (all items - full list)</span>
+            <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                <select id="sortProductListSelect" style="padding: 6px 12px; border-radius: 40px; border: 1px solid #dce3ec; font-size: 0.8rem; background: white;">
+                    <option value="revenue">Sort by Revenue (High to Low)</option>
+                    <option value="quantity">Sort by Quantity (High to Low)</option>
+                    <option value="name">Sort by Name (A-Z)</option>
+                    <option value="revenue_quantity">Sort by Revenue then Quantity</option>
+                </select>
+                <button id="downloadFullProductListBtn" class="download-report-btn" style="background: #2c5a2e; font-size: 0.8rem; padding: 6px 16px;">
+                    📥 Download
+                </button>
+            </div>
+        </div>
+        <div id="productsList" class="product-table-container">Loading...</div>
+        <div class="note">* Amounts shown are after all discounts (promotions, buy-X-free-Y, staff discounts).</div>
+    </div>
+    <!-- ========== END TOP PRODUCTS SECTION ========== -->
+    
+    <div class="section-card">
+        <div class="section-title">📊 Sales by Category</div>
+        <div id="categorySalesList">Loading...</div>
+        <div class="note">* Category totals also reflect discounted revenue.</div>
+    </div>
 </div>
 
 <!-- Store Modal -->
@@ -341,7 +366,217 @@
             let initialPreloadDone = false;
             let currentChartType = "line";
             let allEmployeesList = [];
-            
+            // ========== GENERATE FULL PRODUCT LIST CSV ==========
+
+
+// ========== DOWNLOAD FULL PRODUCT LIST ==========
+function generateFullProductListCSV(productsData, fromDate, toDate, storeName, sortBy) {
+    if (!productsData || !productsData.products || productsData.products.length === 0) {
+        showError("No product data available to export");
+        return null;
+    }
+
+    // Group products by category
+    const categoryMap = new Map();
+    const allProducts = productsData.products;
+
+    // First, get all unique categories
+    const categories = [...new Set(allProducts.map(p => p.category || 'Uncategorized'))].sort();
+
+    // Initialize each category with an empty array
+    categories.forEach(cat => {
+        categoryMap.set(cat, []);
+    });
+
+    // Group products by category
+    allProducts.forEach(p => {
+        const category = p.category || 'Uncategorized';
+        if (categoryMap.has(category)) {
+            categoryMap.get(category).push(p);
+        } else {
+            categoryMap.set(category, [p]);
+        }
+    });
+
+    // ========== SORT PRODUCTS WITHIN CATEGORY BASED ON sortBy ==========
+    categoryMap.forEach((products, category) => {
+        switch(sortBy) {
+            case 'revenue':
+                // Sort by revenue (highest first)
+                products.sort((a, b) => (b.total || 0) - (a.total || 0));
+                break;
+            case 'quantity':
+                // Sort by quantity sold (highest first)
+                products.sort((a, b) => (b.quantity || 0) - (a.quantity || 0));
+                break;
+            case 'name':
+                // Sort alphabetically by product name (A-Z)
+                products.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+                break;
+            case 'name_desc':
+                // Sort alphabetically by product name (Z-A)
+                products.sort((a, b) => (b.name || '').localeCompare(a.name || ''));
+                break;
+            case 'revenue_quantity':
+                // Sort by revenue first, then by quantity (both highest first)
+                products.sort((a, b) => {
+                    const revenueDiff = (b.total || 0) - (a.total || 0);
+                    if (revenueDiff !== 0) return revenueDiff;
+                    return (b.quantity || 0) - (a.quantity || 0);
+                });
+                break;
+            case 'quantity_revenue':
+                // Sort by quantity first, then by revenue (both highest first)
+                products.sort((a, b) => {
+                    const qtyDiff = (b.quantity || 0) - (a.quantity || 0);
+                    if (qtyDiff !== 0) return qtyDiff;
+                    return (b.total || 0) - (a.total || 0);
+                });
+                break;
+            case 'zero_bottom':
+                // Products with sales first, zero sales at bottom
+                products.sort((a, b) => {
+                    const aHasSales = (a.total || 0) > 0;
+                    const bHasSales = (b.total || 0) > 0;
+                    if (aHasSales && !bHasSales) return -1;
+                    if (!aHasSales && bHasSales) return 1;
+                    return (b.total || 0) - (a.total || 0);
+                });
+                break;
+            default:
+                // Default: sort by revenue (highest first)
+                products.sort((a, b) => (b.total || 0) - (a.total || 0));
+        }
+    });
+
+    // Build CSV content
+    const csvLines = [];
+    
+    // Header with sorting info
+    const sortLabels = {
+        'revenue': 'Revenue (High to Low)',
+        'quantity': 'Quantity (High to Low)',
+        'name': 'Product Name (A-Z)',
+        'name_desc': 'Product Name (Z-A)',
+        'revenue_quantity': 'Revenue then Quantity',
+        'quantity_revenue': 'Quantity then Revenue',
+        'zero_bottom': 'Revenue (Zero at Bottom)'
+    };
+    const sortLabel = sortLabels[sortBy] || 'Revenue (High to Low)';
+    
+    csvLines.push(`"FULL PRODUCT SALES REPORT - ${storeName}"`);
+    csvLines.push(`"Period: ${fromDate} to ${toDate}"`);
+    csvLines.push(`"Generated: ${new Date().toLocaleString()}"`);
+    csvLines.push(`"Sorted by: ${sortLabel}"`);
+    csvLines.push("");
+    csvLines.push("Category,Product Name,Quantity Sold,Total Revenue (RM)");
+
+    // Sort categories alphabetically
+    const sortedCategories = Array.from(categoryMap.keys()).sort();
+
+    // For each category, write products
+    let grandTotalQty = 0;
+    let grandTotalRevenue = 0;
+
+    sortedCategories.forEach(category => {
+        const products = categoryMap.get(category) || [];
+        
+        // Calculate category totals
+        let categoryQty = 0;
+        let categoryRevenue = 0;
+        products.forEach(p => {
+            categoryQty += (p.quantity || 0);
+            categoryRevenue += (p.total || 0);
+        });
+
+        // Add category header row
+        csvLines.push(`"=== ${category.toUpperCase()} ===",,"Category Total: ${categoryQty} items","RM ${categoryRevenue.toFixed(2)}"`);
+        
+        // Add each product in this category
+        if (products.length === 0) {
+            csvLines.push(`"NO PRODUCTS IN THIS CATEGORY",,0,RM 0.00"`);
+        } else {
+            products.forEach(p => {
+                const name = p.name || 'Unknown Product';
+                const qty = p.quantity || 0;
+                const revenue = p.total || 0;
+                csvLines.push(`"${category}","${name}",${qty},"RM ${revenue.toFixed(2)}"`);
+                grandTotalQty += qty;
+                grandTotalRevenue += revenue;
+            });
+        }
+        
+        // Add category separator
+        csvLines.push("");
+    });
+
+    // Add grand total
+    csvLines.push("");
+    csvLines.push(`"GRAND TOTAL","All Categories",${grandTotalQty},"RM ${grandTotalRevenue.toFixed(2)}"`);
+
+    return csvLines.join("\n");
+}
+
+// ========== DOWNLOAD FULL PRODUCT LIST ==========
+async function downloadFullProductList() {
+    if (!currentFrom || !currentTo) {
+        showError("Please select a date range first");
+        return;
+    }
+
+    // Get the selected sorting option
+    const sortSelect = document.getElementById('sortProductListSelect');
+    const sortBy = sortSelect ? sortSelect.value : 'revenue';
+
+    const loadingDiv = document.createElement('div');
+    loadingDiv.className = 'loading-toast';
+    loadingDiv.innerText = `Fetching product data (sorting by ${sortBy})...`;
+    document.body.appendChild(loadingDiv);
+
+    try {
+        // Fetch product data
+        const url = `${POS_BACKEND_URL}?action=getDiscountedProductSalesReport&store=${currentStore}&from=${currentFrom}&to=${currentTo}&employeeId=all`;
+        const response = await fetch(url);
+        const result = await response.json();
+
+        if (!result.success || !result.products) {
+            throw new Error('Failed to fetch product data');
+        }
+
+        // Generate CSV with selected sorting
+        const storeDisplayName = currentStore === 'all' ? 'ALL STORES' : currentStoreDisplay;
+        const csvContent = generateFullProductListCSV(
+            result, 
+            currentFrom, 
+            currentTo, 
+            storeDisplayName,
+            sortBy
+        );
+
+        if (!csvContent) {
+            throw new Error('No data to export');
+        }
+
+        // Download CSV
+        const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const urlFile = URL.createObjectURL(blob);
+        link.href = urlFile;
+        link.setAttribute('download', `full_product_list_${currentFrom}_to_${currentTo}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(urlFile);
+
+        showError(`✅ Product list downloaded (sorted by ${sortBy})!`);
+        setTimeout(() => document.getElementById('errorMsg').style.display = 'none', 3000);
+
+    } catch (err) {
+        showError('Failed to download: ' + err.message);
+    } finally {
+        loadingDiv.remove();
+    }
+}
             // Helper: get today's YYYY-MM-DD in local time
             function getTodayYMD() {
                 const d = new Date();
@@ -1264,7 +1499,11 @@
             generateReportBtn.addEventListener('click', generateCSVReport);
             document.querySelectorAll('[data-report-preset]').forEach(btn => { btn.addEventListener('click', () => { const preset = btn.getAttribute('data-report-preset'); setReportPreset(preset); }); });
             reportModal.addEventListener('click', (e) => { if (e.target === reportModal) closeReportDownloadModal(); });
-            
+            // ========== FULL PRODUCT LIST DOWNLOAD ==========
+const downloadFullProductListBtn = document.getElementById('downloadFullProductListBtn');
+if (downloadFullProductListBtn) {
+    downloadFullProductListBtn.addEventListener('click', downloadFullProductList);
+}
             const storeModal = document.getElementById('storeModal');
             const dateModal = document.getElementById('dateModal');
             function openStoreModal() { storeModal.classList.add('active'); }
