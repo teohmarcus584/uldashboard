@@ -468,6 +468,7 @@ function generateFullProductListCSV(productsData, fromDate, toDate, storeName, s
     csvLines.push(`"Period: ${fromDate} to ${toDate}"`);
     csvLines.push(`"Generated: ${new Date().toLocaleString()}"`);
     csvLines.push(`"Sorted by: ${sortLabel}"`);
+	csvLines.push(`"* Includes ALL products, including those with zero sales"`);
     csvLines.push("");
     csvLines.push("Category,Product Name,Quantity Sold,Total Revenue (RM)");
 
