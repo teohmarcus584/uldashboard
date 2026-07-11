@@ -521,29 +521,38 @@ async function downloadFullProductList() {
 
         console.log(`📊 Products with sales: ${salesResult.products ? salesResult.products.length : 0}`);
         
-        // Debug: Log the first few sales products to see their IDs
+        // 🔍 DEBUG: Log the full sales product object to see all fields
         if (salesResult.products && salesResult.products.length > 0) {
-            console.log('🔍 First 3 sales products:', salesResult.products.slice(0, 3));
-            console.log('🔍 First 3 product IDs from sales:', salesResult.products.slice(0, 3).map(p => p.id));
-        }
-        
-        // Debug: Log the first few all products to see their IDs
-        if (allProductsResult.products && allProductsResult.products.length > 0) {
-            console.log('🔍 First 3 all products:', allProductsResult.products.slice(0, 3));
-            console.log('🔍 First 3 product IDs from all:', allProductsResult.products.slice(0, 3).map(p => p.id));
+            console.log('🔍 Full sales product object (first one):', JSON.stringify(salesResult.products[0], null, 2));
+            console.log('🔍 All keys in sales product:', Object.keys(salesResult.products[0]));
         }
 
-        // 3. Create a map of sales data by product ID (convert to string for comparison)
+        // 3. Create a map of sales data by product ID
+        // Try different possible ID field names
         const salesMap = new Map();
         if (salesResult.products) {
             salesResult.products.forEach(p => {
-                // 🔑 KEY FIX: Convert both to string for comparison
-                const id = String(p.id);
-                salesMap.set(id, {
-                    quantity: p.quantity || 0,
-                    total: p.total || 0
-                });
-                console.log(`📝 Sales map set: ${id} -> Qty: ${p.quantity}, Total: ${p.total}`);
+                // Try different possible ID field names
+                const id = p.product_id || p.id || p.productId || p._id || p.item_id || p.product;
+                
+                // If id is still undefined, try using the product name as a fallback
+                if (!id || id === undefined) {
+                    console.warn('⚠️ Sales product has no ID:', p);
+                    // Use name as fallback if ID is missing
+                    const nameId = p.name || p.product_name || 'unknown';
+                    salesMap.set(`name_${nameId}`, {
+                        quantity: p.quantity || 0,
+                        total: p.total || 0,
+                        name: p.name || p.product_name || ''
+                    });
+                } else {
+                    console.log(`📝 Sales map set: ${id} -> Qty: ${p.quantity}, Total: ${p.total}`);
+                    salesMap.set(String(id), {
+                        quantity: p.quantity || 0,
+                        total: p.total || 0,
+                        name: p.name || p.product_name || ''
+                    });
+                }
             });
         }
 
@@ -551,20 +560,32 @@ async function downloadFullProductList() {
 
         // 4. Merge: Use ALL products, add sales data if available
         const mergedProducts = allProductsResult.products.map(p => {
-            // 🔑 KEY FIX: Convert product ID to string for comparison
             const id = String(p.id);
             const salesData = salesMap.get(id);
             
-            if (salesData) {
-                console.log(`✅ Match found for product: ${p.name} (ID: ${id}) -> Qty: ${salesData.quantity}`);
+            // If not found by ID, try matching by name
+            let matchedSales = salesData;
+            if (!matchedSales) {
+                // Try to find by name
+                for (const [key, value] of salesMap.entries()) {
+                    if (key.startsWith('name_') && value.name === p.name) {
+                        matchedSales = value;
+                        console.log(`✅ Match found by name: ${p.name}`);
+                        break;
+                    }
+                }
+            }
+            
+            if (matchedSales) {
+                console.log(`✅ Match found for product: ${p.name} (ID: ${id}) -> Qty: ${matchedSales.quantity}`);
             }
             
             return {
                 id: p.id,
                 name: p.name,
                 category: p.category || 'Uncategorized',
-                quantity: salesData ? salesData.quantity : 0,
-                total: salesData ? salesData.total : 0
+                quantity: matchedSales ? matchedSales.quantity : 0,
+                total: matchedSales ? matchedSales.total : 0
             };
         });
 
