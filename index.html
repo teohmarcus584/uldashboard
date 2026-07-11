@@ -346,8 +346,8 @@
             const irsStoreOptionTrigger = document.getElementById('irsStoreOptionTrigger');
             
             // ----- Config & State -----
-            const BACKEND_URL = "https://script.google.com/macros/s/AKfycbzYjAIoek-5cWl8vkFYf4Q0Yuec72LjeDDZnpGTkVfy75gYgeXY18IGDSAFmkNKceMfgA/exec";
-            const POS_BACKEND_URL = "https://script.google.com/macros/s/AKfycbzYjAIoek-5cWl8vkFYf4Q0Yuec72LjeDDZnpGTkVfy75gYgeXY18IGDSAFmkNKceMfgA/exec";
+            const BACKEND_URL = "https://script.google.com/macros/s/AKfycbxPfPCmGXDDDakhgXVAr1wGKnqaVzWE3eAUYMBJtzT8WCYj3peHeXGbJD00RX7jqLl8LQ/exec";
+            const POS_BACKEND_URL = "https://script.google.com/macros/s/AKfycbxPfPCmGXDDDakhgXVAr1wGKnqaVzWE3eAUYMBJtzT8WCYj3peHeXGbJD00RX7jqLl8LQ/exec";
             const CACHE_TTL = 60000;
             const PRELOAD_DELAY = 800;
             const cache = new Map();
@@ -519,37 +519,69 @@ function generateFullProductListCSV(productsData, fromDate, toDate, storeName, s
 }
 
 // ========== DOWNLOAD FULL PRODUCT LIST ==========
+// ========== DOWNLOAD FULL PRODUCT LIST (UPDATED) ==========
 async function downloadFullProductList() {
     if (!currentFrom || !currentTo) {
         showError("Please select a date range first");
         return;
     }
 
-    // Get the selected sorting option
     const sortSelect = document.getElementById('sortProductListSelect');
     const sortBy = sortSelect ? sortSelect.value : 'revenue';
 
     const loadingDiv = document.createElement('div');
     loadingDiv.className = 'loading-toast';
-    loadingDiv.innerText = `Fetching product data (sorting by ${sortBy})...`;
+    loadingDiv.innerText = 'Fetching product data...';
     document.body.appendChild(loadingDiv);
 
     try {
-        // Fetch product data
-        const url = `${POS_BACKEND_URL}?action=getDiscountedProductSalesReport&store=${currentStore}&from=${currentFrom}&to=${currentTo}&employeeId=all`;
-        const response = await fetch(url);
-        const result = await response.json();
+        // 1. Get ALL products from the backend (including those with zero sales)
+        const allProductsUrl = `${POS_BACKEND_URL}?action=getAllProducts&store=${currentStore}`;
+        const allProductsResponse = await fetch(allProductsUrl);
+        const allProductsResult = await allProductsResponse.json();
 
-        if (!result.success || !result.products) {
-            throw new Error('Failed to fetch product data');
+        if (!allProductsResult.success || !allProductsResult.products) {
+            throw new Error('Failed to fetch product list');
         }
 
-        // Generate CSV with selected sorting
+        // 2. Get sales data (products that were sold)
+        const salesUrl = `${POS_BACKEND_URL}?action=getDiscountedProductSalesReport&store=${currentStore}&from=${currentFrom}&to=${currentTo}&employeeId=all`;
+        const salesResponse = await fetch(salesUrl);
+        const salesResult = await salesResponse.json();
+
+        if (!salesResult.success) {
+            throw new Error('Failed to fetch sales data');
+        }
+
+        // 3. Create a map of sales data by product ID
+        const salesMap = new Map();
+        if (salesResult.products) {
+            salesResult.products.forEach(p => {
+                salesMap.set(p.id, {
+                    quantity: p.quantity || 0,
+                    total: p.total || 0
+                });
+            });
+        }
+
+        // 4. Merge: Use ALL products, add sales data if available
+        const mergedProducts = allProductsResult.products.map(p => {
+            const salesData = salesMap.get(p.id);
+            return {
+                id: p.id,
+                name: p.name,
+                category: p.category || 'Uncategorized',
+                quantity: salesData ? salesData.quantity : 0,
+                total: salesData ? salesData.total : 0
+            };
+        });
+
+        // 5. Generate CSV with merged data
         const storeDisplayName = currentStore === 'all' ? 'ALL STORES' : currentStoreDisplay;
         const csvContent = generateFullProductListCSV(
-            result, 
-            currentFrom, 
-            currentTo, 
+            { products: mergedProducts },
+            currentFrom,
+            currentTo,
             storeDisplayName,
             sortBy
         );
@@ -558,18 +590,18 @@ async function downloadFullProductList() {
             throw new Error('No data to export');
         }
 
-        // Download CSV
+        // 6. Download CSV
         const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a');
         const urlFile = URL.createObjectURL(blob);
         link.href = urlFile;
-        link.setAttribute('download', `full_product_list_${currentFrom}_to_${currentTo}.csv`);
+        link.setAttribute('download', `full_product_list_ALL_${currentFrom}_to_${currentTo}.csv`);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
         URL.revokeObjectURL(urlFile);
 
-        showError(`✅ Product list downloaded (sorted by ${sortBy})!`);
+        showError('✅ Product list downloaded! Includes ALL products.');
         setTimeout(() => document.getElementById('errorMsg').style.display = 'none', 3000);
 
     } catch (err) {
