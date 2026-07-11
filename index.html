@@ -380,7 +380,7 @@ function generateFullProductListCSV(productsData, fromDate, toDate, storeName, s
     const categoryMap = new Map();
     const allProducts = productsData.products;
 
-    // First, get all unique categories
+    // Get all unique categories
     const categories = [...new Set(allProducts.map(p => p.category || 'Uncategorized'))].sort();
 
     // Initialize each category with an empty array
@@ -398,53 +398,26 @@ function generateFullProductListCSV(productsData, fromDate, toDate, storeName, s
         }
     });
 
-    // ========== SORT PRODUCTS WITHIN CATEGORY BASED ON sortBy ==========
+    // Sort products within each category
     categoryMap.forEach((products, category) => {
         switch(sortBy) {
             case 'revenue':
-                // Sort by revenue (highest first)
                 products.sort((a, b) => (b.total || 0) - (a.total || 0));
                 break;
             case 'quantity':
-                // Sort by quantity sold (highest first)
                 products.sort((a, b) => (b.quantity || 0) - (a.quantity || 0));
                 break;
             case 'name':
-                // Sort alphabetically by product name (A-Z)
                 products.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
                 break;
-            case 'name_desc':
-                // Sort alphabetically by product name (Z-A)
-                products.sort((a, b) => (b.name || '').localeCompare(a.name || ''));
-                break;
             case 'revenue_quantity':
-                // Sort by revenue first, then by quantity (both highest first)
                 products.sort((a, b) => {
                     const revenueDiff = (b.total || 0) - (a.total || 0);
                     if (revenueDiff !== 0) return revenueDiff;
                     return (b.quantity || 0) - (a.quantity || 0);
                 });
                 break;
-            case 'quantity_revenue':
-                // Sort by quantity first, then by revenue (both highest first)
-                products.sort((a, b) => {
-                    const qtyDiff = (b.quantity || 0) - (a.quantity || 0);
-                    if (qtyDiff !== 0) return qtyDiff;
-                    return (b.total || 0) - (a.total || 0);
-                });
-                break;
-            case 'zero_bottom':
-                // Products with sales first, zero sales at bottom
-                products.sort((a, b) => {
-                    const aHasSales = (a.total || 0) > 0;
-                    const bHasSales = (b.total || 0) > 0;
-                    if (aHasSales && !bHasSales) return -1;
-                    if (!aHasSales && bHasSales) return 1;
-                    return (b.total || 0) - (a.total || 0);
-                });
-                break;
             default:
-                // Default: sort by revenue (highest first)
                 products.sort((a, b) => (b.total || 0) - (a.total || 0));
         }
     });
@@ -452,15 +425,12 @@ function generateFullProductListCSV(productsData, fromDate, toDate, storeName, s
     // Build CSV content
     const csvLines = [];
     
-    // Header with sorting info
+    // Header
     const sortLabels = {
         'revenue': 'Revenue (High to Low)',
         'quantity': 'Quantity (High to Low)',
         'name': 'Product Name (A-Z)',
-        'name_desc': 'Product Name (Z-A)',
-        'revenue_quantity': 'Revenue then Quantity',
-        'quantity_revenue': 'Quantity then Revenue',
-        'zero_bottom': 'Revenue (Zero at Bottom)'
+        'revenue_quantity': 'Revenue then Quantity'
     };
     const sortLabel = sortLabels[sortBy] || 'Revenue (High to Low)';
     
@@ -468,21 +438,19 @@ function generateFullProductListCSV(productsData, fromDate, toDate, storeName, s
     csvLines.push(`"Period: ${fromDate} to ${toDate}"`);
     csvLines.push(`"Generated: ${new Date().toLocaleString()}"`);
     csvLines.push(`"Sorted by: ${sortLabel}"`);
-	csvLines.push(`"* Includes ALL products, including those with zero sales"`);
+    csvLines.push(`"* Includes ALL products, including those with zero sales"`);
     csvLines.push("");
     csvLines.push("Category,Product Name,Quantity Sold,Total Revenue (RM)");
 
     // Sort categories alphabetically
     const sortedCategories = Array.from(categoryMap.keys()).sort();
 
-    // For each category, write products
     let grandTotalQty = 0;
     let grandTotalRevenue = 0;
 
     sortedCategories.forEach(category => {
         const products = categoryMap.get(category) || [];
         
-        // Calculate category totals
         let categoryQty = 0;
         let categoryRevenue = 0;
         products.forEach(p => {
@@ -490,10 +458,8 @@ function generateFullProductListCSV(productsData, fromDate, toDate, storeName, s
             categoryRevenue += (p.total || 0);
         });
 
-        // Add category header row
         csvLines.push(`"=== ${category.toUpperCase()} ===",,"Category Total: ${categoryQty} items","RM ${categoryRevenue.toFixed(2)}"`);
         
-        // Add each product in this category
         if (products.length === 0) {
             csvLines.push(`"NO PRODUCTS IN THIS CATEGORY",,0,RM 0.00"`);
         } else {
@@ -506,12 +472,9 @@ function generateFullProductListCSV(productsData, fromDate, toDate, storeName, s
                 grandTotalRevenue += revenue;
             });
         }
-        
-        // Add category separator
         csvLines.push("");
     });
 
-    // Add grand total
     csvLines.push("");
     csvLines.push(`"GRAND TOTAL","All Categories",${grandTotalQty},"RM ${grandTotalRevenue.toFixed(2)}"`);
 
@@ -526,6 +489,7 @@ async function downloadFullProductList() {
         return;
     }
 
+    // Get the selected sorting option
     const sortSelect = document.getElementById('sortProductListSelect');
     const sortBy = sortSelect ? sortSelect.value : 'revenue';
 
@@ -544,6 +508,8 @@ async function downloadFullProductList() {
             throw new Error('Failed to fetch product list');
         }
 
+        console.log(`📦 Total products in inventory: ${allProductsResult.products.length}`);
+
         // 2. Get sales data (products that were sold)
         const salesUrl = `${POS_BACKEND_URL}?action=getDiscountedProductSalesReport&store=${currentStore}&from=${currentFrom}&to=${currentTo}&employeeId=all`;
         const salesResponse = await fetch(salesUrl);
@@ -552,6 +518,8 @@ async function downloadFullProductList() {
         if (!salesResult.success) {
             throw new Error('Failed to fetch sales data');
         }
+
+        console.log(`📊 Products with sales: ${salesResult.products ? salesResult.products.length : 0}`);
 
         // 3. Create a map of sales data by product ID
         const salesMap = new Map();
@@ -575,6 +543,10 @@ async function downloadFullProductList() {
                 total: salesData ? salesData.total : 0
             };
         });
+
+        // Count products with sales > 0
+        const productsWithSales = mergedProducts.filter(p => p.quantity > 0);
+        console.log(`✅ Merged: ${mergedProducts.length} total products, ${productsWithSales.length} with sales`);
 
         // 5. Generate CSV with merged data
         const storeDisplayName = currentStore === 'all' ? 'ALL STORES' : currentStoreDisplay;
@@ -601,10 +573,11 @@ async function downloadFullProductList() {
         document.body.removeChild(link);
         URL.revokeObjectURL(urlFile);
 
-        showError('✅ Product list downloaded! Includes ALL products.');
+        showError(`✅ Product list downloaded! ${mergedProducts.length} products (${productsWithSales.length} with sales)`);
         setTimeout(() => document.getElementById('errorMsg').style.display = 'none', 3000);
 
     } catch (err) {
+        console.error('Download error:', err);
         showError('Failed to download: ' + err.message);
     } finally {
         loadingDiv.remove();
