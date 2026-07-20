@@ -103,6 +103,8 @@
         .mini-table { width: 100%; font-size: 0.9rem; border-collapse: collapse; }
         .mini-table th, .mini-table td { padding: 14px 8px; text-align: left; border-bottom: 1px solid #ecf0f5; }
         .badge { background: #eef2ff; border-radius: 40px; padding: 4px 10px; font-size: 0.75rem; font-weight: 600; display: inline-block; margin-top: 4px; }
+        .badge-free { background: #fef3c7; color: #92400e; border-radius: 40px; padding: 4px 10px; font-size: 0.7rem; font-weight: 600; display: inline-block; margin-left: 6px; }
+        .badge-paid { background: #d1fae5; color: #065f46; border-radius: 40px; padding: 4px 10px; font-size: 0.7rem; font-weight: 600; display: inline-block; margin-left: 6px; }
         .error-toast { background: #fee2e2; border-radius: 28px; padding: 14px 18px; margin-bottom: 20px; color: #b91c1c; font-size: 0.9rem; border-left: 5px solid #b91c1c; display: none; }
         canvas { max-height: 260px; width: 100%; margin-top: 8px; }
         .refresh-spin { animation: spin 0.6s linear infinite; }
@@ -127,6 +129,13 @@
         .choice-option { background: #f8fafd; padding: 20px; margin: 16px 0; border-radius: 28px; text-align: center; cursor: pointer; border: 1px solid #e2e8f0; transition: 0.2s; }
         .choice-option:hover { background: #eef2ff; border-color: #2b6e9e; transform: translateY(-2px); }
         .choice-icon { font-size: 2rem; margin-bottom: 8px; display: block; }
+        .category-header { background: #f0f3f9; font-weight: 700; }
+        .total-row { background: #f8fafd; font-weight: 700; }
+        .missing-warning { background: #fef3c7; border-left: 4px solid #f59e0b; padding: 12px 16px; border-radius: 8px; margin-bottom: 12px; font-size: 0.9rem; color: #92400e; }
+        .success-warning { background: #d1fae5; border-left: 4px solid #10b981; padding: 12px 16px; border-radius: 8px; margin-bottom: 12px; font-size: 0.9rem; color: #065f46; }
+        .free-item-row td { color: #92400e; }
+        .paid-item-row td { color: #065f46; }
+        .item-detail { font-size: 0.75rem; color: #6c86a3; display: block; }
     </style>
 </head>
 <body>
@@ -167,7 +176,7 @@
     <!-- ========== TOP PRODUCTS SECTION - FIXED ========== -->
     <div class="section-card">
         <div class="section-title" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
-            <span style="border-left: 5px solid #2b6e9e; padding-left: 14px;">🏆 Top Products (all items - full list)</span>
+            <span style="border-left: 5px solid #2b6e9e; padding-left: 14px;">🏆 Product Sales Breakdown</span>
             <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
                 <select id="sortProductListSelect" style="padding: 6px 12px; border-radius: 40px; border: 1px solid #dce3ec; font-size: 0.8rem; background: white;">
                     <option value="revenue">Sort by Revenue (High to Low)</option>
@@ -180,15 +189,17 @@
                 </button>
             </div>
         </div>
+        <div id="productTotalWarning" class="missing-warning" style="display:none;"></div>
+        <div id="productTotalSuccess" class="success-warning" style="display:none;"></div>
         <div id="productsList" class="product-table-container">Loading...</div>
-        <div class="note">* Amounts shown are after all discounts (promotions, buy-X-free-Y, staff discounts).</div>
+        <div class="note">* 🎁 = Free item (Buy X Free Y promotion). 💰 = Paid item.</div>
     </div>
     <!-- ========== END TOP PRODUCTS SECTION ========== -->
     
     <div class="section-card">
         <div class="section-title">📊 Sales by Category</div>
         <div id="categorySalesList">Loading...</div>
-        <div class="note">* Category totals also reflect discounted revenue.</div>
+        <div class="note">* Category totals reflect discounted revenue. Free items counted in quantity but not revenue.</div>
     </div>
 </div>
 
@@ -322,6 +333,8 @@
             const reportEmployeeSelect = document.getElementById('reportEmployeeSelect');
             const productsContainer = document.getElementById('productsList');
             const categoryContainer = document.getElementById('categorySalesList');
+            const productTotalWarning = document.getElementById('productTotalWarning');
+            const productTotalSuccess = document.getElementById('productTotalSuccess');
             
             // ----- Receipt PDF elements -----
             const receiptPdfBtn = document.getElementById('receiptPdfBtn');
@@ -348,7 +361,7 @@
             // ----- Config & State -----
             const BACKEND_URL = "https://script.google.com/macros/s/AKfycbxPfPCmGXDDDakhgXVAr1wGKnqaVzWE3eAUYMBJtzT8WCYj3peHeXGbJD00RX7jqLl8LQ/exec";
             const POS_BACKEND_URL = "https://script.google.com/macros/s/AKfycbxPfPCmGXDDDakhgXVAr1wGKnqaVzWE3eAUYMBJtzT8WCYj3peHeXGbJD00RX7jqLl8LQ/exec";
-            const CACHE_TTL = 60000;
+            const CACHE_TTL = 30000;
             const PRELOAD_DELAY = 800;
             const cache = new Map();
             let currentAbortController = null;
@@ -366,268 +379,339 @@
             let initialPreloadDone = false;
             let currentChartType = "line";
             let allEmployeesList = [];
-            // ========== GENERATE FULL PRODUCT LIST CSV ==========
-
-
-// ========== DOWNLOAD FULL PRODUCT LIST ==========
-function generateFullProductListCSV(productsData, fromDate, toDate, storeName, sortBy) {
-    if (!productsData || !productsData.products || productsData.products.length === 0) {
-        showError("No product data available to export");
-        return null;
-    }
-
-    // Group products by category
-    const categoryMap = new Map();
-    const allProducts = productsData.products;
-
-    // Get all unique categories
-    const categories = [...new Set(allProducts.map(p => p.category || 'Uncategorized'))].sort();
-
-    // Initialize each category with an empty array
-    categories.forEach(cat => {
-        categoryMap.set(cat, []);
-    });
-
-    // Group products by category
-    allProducts.forEach(p => {
-        const category = p.category || 'Uncategorized';
-        if (categoryMap.has(category)) {
-            categoryMap.get(category).push(p);
-        } else {
-            categoryMap.set(category, [p]);
-        }
-    });
-
-    // Sort products within each category
-    categoryMap.forEach((products, category) => {
-        switch(sortBy) {
-            case 'revenue':
-                products.sort((a, b) => (b.total || 0) - (a.total || 0));
-                break;
-            case 'quantity':
-                products.sort((a, b) => (b.quantity || 0) - (a.quantity || 0));
-                break;
-            case 'name':
-                products.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-                break;
-            case 'revenue_quantity':
-                products.sort((a, b) => {
-                    const revenueDiff = (b.total || 0) - (a.total || 0);
-                    if (revenueDiff !== 0) return revenueDiff;
-                    return (b.quantity || 0) - (a.quantity || 0);
-                });
-                break;
-            default:
-                products.sort((a, b) => (b.total || 0) - (a.total || 0));
-        }
-    });
-
-    // Build CSV content
-    const csvLines = [];
-    
-    // Header
-    const sortLabels = {
-        'revenue': 'Revenue (High to Low)',
-        'quantity': 'Quantity (High to Low)',
-        'name': 'Product Name (A-Z)',
-        'revenue_quantity': 'Revenue then Quantity'
-    };
-    const sortLabel = sortLabels[sortBy] || 'Revenue (High to Low)';
-    
-    csvLines.push(`"FULL PRODUCT SALES REPORT - ${storeName}"`);
-    csvLines.push(`"Period: ${fromDate} to ${toDate}"`);
-    csvLines.push(`"Generated: ${new Date().toLocaleString()}"`);
-    csvLines.push(`"Sorted by: ${sortLabel}"`);
-    csvLines.push(`"* Includes ALL products, including those with zero sales"`);
-    csvLines.push("");
-    csvLines.push("Category,Product Name,Quantity Sold,Total Revenue (RM)");
-
-    // Sort categories alphabetically
-    const sortedCategories = Array.from(categoryMap.keys()).sort();
-
-    let grandTotalQty = 0;
-    let grandTotalRevenue = 0;
-
-    sortedCategories.forEach(category => {
-        const products = categoryMap.get(category) || [];
-        
-        let categoryQty = 0;
-        let categoryRevenue = 0;
-        products.forEach(p => {
-            categoryQty += (p.quantity || 0);
-            categoryRevenue += (p.total || 0);
-        });
-
-        csvLines.push(`"=== ${category.toUpperCase()} ===",,"Category Total: ${categoryQty} items","RM ${categoryRevenue.toFixed(2)}"`);
-        
-        if (products.length === 0) {
-            csvLines.push(`"NO PRODUCTS IN THIS CATEGORY",,0,RM 0.00"`);
-        } else {
-            products.forEach(p => {
-                const name = p.name || 'Unknown Product';
-                const qty = p.quantity || 0;
-                const revenue = p.total || 0;
-                csvLines.push(`"${category}","${name}",${qty},"RM ${revenue.toFixed(2)}"`);
-                grandTotalQty += qty;
-                grandTotalRevenue += revenue;
-            });
-        }
-        csvLines.push("");
-    });
-
-    csvLines.push("");
-    csvLines.push(`"GRAND TOTAL","All Categories",${grandTotalQty},"RM ${grandTotalRevenue.toFixed(2)}"`);
-
-    return csvLines.join("\n");
-}
-
-// ========== DOWNLOAD FULL PRODUCT LIST ==========
-// ========== DOWNLOAD FULL PRODUCT LIST (UPDATED) ==========
-async function downloadFullProductList() {
-    if (!currentFrom || !currentTo) {
-        showError("Please select a date range first");
-        return;
-    }
-
-    // Get the selected sorting option
-    const sortSelect = document.getElementById('sortProductListSelect');
-    const sortBy = sortSelect ? sortSelect.value : 'revenue';
-
-    const loadingDiv = document.createElement('div');
-    loadingDiv.className = 'loading-toast';
-    loadingDiv.innerText = 'Fetching product data...';
-    document.body.appendChild(loadingDiv);
-
-    try {
-        // 1. Get ALL products from the backend (including those with zero sales)
-        const allProductsUrl = `${POS_BACKEND_URL}?action=getAllProducts&store=${currentStore}`;
-        const allProductsResponse = await fetch(allProductsUrl);
-        const allProductsResult = await allProductsResponse.json();
-
-        if (!allProductsResult.success || !allProductsResult.products) {
-            throw new Error('Failed to fetch product list');
-        }
-
-        console.log(`📦 Total products in inventory: ${allProductsResult.products.length}`);
-
-        // 2. Get sales data (products that were sold)
-        const salesUrl = `${POS_BACKEND_URL}?action=getDiscountedProductSalesReport&store=${currentStore}&from=${currentFrom}&to=${currentTo}&employeeId=all`;
-        const salesResponse = await fetch(salesUrl);
-        const salesResult = await salesResponse.json();
-
-        if (!salesResult.success) {
-            throw new Error('Failed to fetch sales data');
-        }
-
-        console.log(`📊 Products with sales: ${salesResult.products ? salesResult.products.length : 0}`);
-        
-        // 🔍 DEBUG: Log the full sales product object to see all fields
-        if (salesResult.products && salesResult.products.length > 0) {
-            console.log('🔍 Full sales product object (first one):', JSON.stringify(salesResult.products[0], null, 2));
-            console.log('🔍 All keys in sales product:', Object.keys(salesResult.products[0]));
-        }
-
-        // 3. Create a map of sales data by product ID
-        // Try different possible ID field names
-        const salesMap = new Map();
-        if (salesResult.products) {
-            salesResult.products.forEach(p => {
-                // Try different possible ID field names
-                const id = p.product_id || p.id || p.productId || p._id || p.item_id || p.product;
-                
-                // If id is still undefined, try using the product name as a fallback
-                if (!id || id === undefined) {
-                    console.warn('⚠️ Sales product has no ID:', p);
-                    // Use name as fallback if ID is missing
-                    const nameId = p.name || p.product_name || 'unknown';
-                    salesMap.set(`name_${nameId}`, {
-                        quantity: p.quantity || 0,
-                        total: p.total || 0,
-                        name: p.name || p.product_name || ''
-                    });
-                } else {
-                    console.log(`📝 Sales map set: ${id} -> Qty: ${p.quantity}, Total: ${p.total}`);
-                    salesMap.set(String(id), {
-                        quantity: p.quantity || 0,
-                        total: p.total || 0,
-                        name: p.name || p.product_name || ''
-                    });
-                }
-            });
-        }
-
-        console.log(`📝 Sales map size: ${salesMap.size}`);
-
-        // 4. Merge: Use ALL products, add sales data if available
-        const mergedProducts = allProductsResult.products.map(p => {
-            const id = String(p.id);
-            const salesData = salesMap.get(id);
+            let productCategoryMap = {};
+            let rawReceiptsData = [];
             
-            // If not found by ID, try matching by name
-            let matchedSales = salesData;
-            if (!matchedSales) {
-                // Try to find by name
-                for (const [key, value] of salesMap.entries()) {
-                    if (key.startsWith('name_') && value.name === p.name) {
-                        matchedSales = value;
-                        console.log(`✅ Match found by name: ${p.name}`);
-                        break;
+            // ========== FETCH PRODUCT CATEGORY MAP ==========
+            async function fetchProductCategoryMap(store) {
+                try {
+                    const url = `${POS_BACKEND_URL}?action=getAllProducts&store=${store}`;
+                    const response = await fetch(url);
+                    const result = await response.json();
+                    
+                    if (result.success && result.products) {
+                        productCategoryMap = {};
+                        result.products.forEach(p => {
+                            productCategoryMap[p.id] = p.category || 'Uncategorized';
+                        });
+                        console.log(`✅ Loaded ${Object.keys(productCategoryMap).length} product categories`);
+                        return productCategoryMap;
                     }
+                    return {};
+                } catch (err) {
+                    console.error('Error fetching product categories:', err);
+                    return {};
                 }
             }
-            
-            if (matchedSales) {
-                console.log(`✅ Match found for product: ${p.name} (ID: ${id}) -> Qty: ${matchedSales.quantity}`);
+
+            // ========== FETCH RAW RECEIPTS ==========
+            async function fetchRawReceipts(store, from, to) {
+                try {
+                    const url = `${POS_BACKEND_URL}?action=getReceipts&store=${store}&from=${from}&to=${to}&employeeId=all`;
+                    const response = await fetch(url);
+                    const result = await response.json();
+                    
+                    if (result.success && result.receipts) {
+                        rawReceiptsData = result.receipts;
+                        console.log(`✅ Loaded ${rawReceiptsData.length} receipts`);
+                        return rawReceiptsData;
+                    }
+                    return [];
+                } catch (err) {
+                    console.error('Error fetching receipts:', err);
+                    return [];
+                }
             }
-            
-            return {
-                id: p.id,
-                name: p.name,
-                category: p.category || 'Uncategorized',
-                quantity: matchedSales ? matchedSales.quantity : 0,
-                total: matchedSales ? matchedSales.total : 0
-            };
-        });
 
-        // Count products with sales > 0
-        const productsWithSales = mergedProducts.filter(p => p.quantity > 0);
-        console.log(`✅ Merged: ${mergedProducts.length} total products, ${productsWithSales.length} with sales`);
+            // ========== BUILD ACCURATE PRODUCT BREAKDOWN FROM RECEIPTS ==========
+            function buildProductBreakdownFromReceipts(receipts, categoryMap) {
+                const productMap = new Map();
+                let totalSalesFromProducts = 0;
+                let totalQuantityFromProducts = 0;
+                let freeItemCount = 0;
+                let paidItemCount = 0;
+                let totalFreeItemValue = 0;
+                
+                receipts.forEach(receipt => {
+                    const items = receipt.items || [];
+                    const receiptTotal = parseFloat(receipt.total) || 0;
+                    
+                    // Skip refunds (negative totals)
+                    if (receiptTotal < 0) return;
+                    
+                    // If there are no items, try to use the item_name field
+                    if (items.length === 0 && receipt.item_name) {
+                        const item = {
+                            id: receipt.item_id || 'unknown',
+                            name: receipt.item_name,
+                            quantity: receipt.quantity || 1,
+                            price: receipt.price || 0,
+                            total: receiptTotal,
+                            category: receipt.category || 'Uncategorized'
+                        };
+                        items.push(item);
+                    }
+                    
+                    items.forEach(item => {
+                        const id = String(item.id || item.product_id || 'unknown');
+                        const name = item.name || item.item_name || 'Unknown Product';
+                        const category = categoryMap[id] || item.category || 'Uncategorized';
+                        
+                        // Get the free_quantity from the item
+                        const freeQty = parseInt(item.free_quantity) || 0;
+                        const totalQty = parseInt(item.quantity) || 0;
+                        
+                        // Calculate paid quantity: total - free
+                        const paidQty = Math.max(0, totalQty - freeQty);
+                        
+                        // Get the price per unit
+                        const unitPrice = parseFloat(item.price) || 0;
+                        
+                        // Get the total for this item (from the receipt)
+                        const itemTotal = parseFloat(item.total) || 0;
+                        
+                        // Determine if this is a Buy X Free Y promotion
+                        const isBuyXFreeY = freeQty > 0;
+                        
+                        // For Buy X Free Y: the total should be paidQty * unitPrice
+                        // But we use the actual itemTotal from the receipt
+                        const paidRevenue = isBuyXFreeY ? (paidQty * unitPrice) : itemTotal;
+                        const freeRevenue = 0; // Free items always have 0 revenue
+                        
+                        // Initialize or get existing product entry
+                        if (!productMap.has(id)) {
+                            productMap.set(id, {
+                                id: id,
+                                name: name,
+                                category: category,
+                                totalQuantity: 0,
+                                paidQuantity: 0,
+                                freeQuantity: 0,
+                                totalRevenue: 0,
+                                paidRevenue: 0,
+                                freeRevenue: 0,
+                                unitPrice: unitPrice,
+                                isBuyXFreeY: false
+                            });
+                        }
+                        const existing = productMap.get(id);
+                        
+                        // Update quantities
+                        existing.totalQuantity += totalQty;
+                        existing.paidQuantity += paidQty;
+                        existing.freeQuantity += freeQty;
+                        
+                        // Update revenue
+                        if (isBuyXFreeY) {
+                            // Buy X Free Y: only the paid items generate revenue
+                            existing.paidRevenue += paidRevenue;
+                            existing.totalRevenue += paidRevenue;
+                            existing.isBuyXFreeY = true;
+                            totalSalesFromProducts += paidRevenue;
+                            paidItemCount += paidQty;
+                            freeItemCount += freeQty;
+                            totalFreeItemValue += freeQty * unitPrice;
+                        } else {
+                            // Regular item: use the item total
+                            existing.paidRevenue += itemTotal;
+                            existing.totalRevenue += itemTotal;
+                            totalSalesFromProducts += itemTotal;
+                            totalQuantityFromProducts += totalQty;
+                            if (itemTotal === 0) {
+                                freeItemCount += totalQty;
+                                totalFreeItemValue += totalQty * unitPrice;
+                            } else {
+                                paidItemCount += totalQty;
+                            }
+                        }
+                    });
+                });
+                
+                const products = Array.from(productMap.values());
+                console.log(`📊 Product breakdown: ${products.length} products, Total: RM ${totalSalesFromProducts.toFixed(2)}, Paid: ${paidItemCount}, Free: ${freeItemCount}`);
+                
+                return {
+                    products: products,
+                    totalSales: totalSalesFromProducts,
+                    totalQuantity: totalQuantityFromProducts + freeItemCount,
+                    paidItemCount: paidItemCount,
+                    freeItemCount: freeItemCount,
+                    totalFreeItemValue: totalFreeItemValue
+                };
+            }
 
-        // 5. Generate CSV with merged data
-        const storeDisplayName = currentStore === 'all' ? 'ALL STORES' : currentStoreDisplay;
-        const csvContent = generateFullProductListCSV(
-            { products: mergedProducts },
-            currentFrom,
-            currentTo,
-            storeDisplayName,
-            sortBy
-        );
+            // ========== GENERATE FULL PRODUCT LIST CSV ==========
+            function generateFullProductListCSV(productsData, fromDate, toDate, storeName, sortBy) {
+                if (!productsData || productsData.length === 0) {
+                    showError("No product data available to export");
+                    return null;
+                }
 
-        if (!csvContent) {
-            throw new Error('No data to export');
-        }
+                const categoryMap = new Map();
+                const allProducts = productsData;
+                const categories = [...new Set(allProducts.map(p => p.category || 'Uncategorized'))].sort();
 
-        // 6. Download CSV
-        const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement('a');
-        const urlFile = URL.createObjectURL(blob);
-        link.href = urlFile;
-        link.setAttribute('download', `full_product_list_ALL_${currentFrom}_to_${currentTo}.csv`);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(urlFile);
+                categories.forEach(cat => {
+                    categoryMap.set(cat, []);
+                });
 
-        showError(`✅ Product list downloaded! ${mergedProducts.length} products (${productsWithSales.length} with sales)`);
-        setTimeout(() => document.getElementById('errorMsg').style.display = 'none', 3000);
+                allProducts.forEach(p => {
+                    const category = p.category || 'Uncategorized';
+                    if (categoryMap.has(category)) {
+                        categoryMap.get(category).push(p);
+                    } else {
+                        categoryMap.set(category, [p]);
+                    }
+                });
 
-    } catch (err) {
-        console.error('Download error:', err);
-        showError('Failed to download: ' + err.message);
-    } finally {
-        loadingDiv.remove();
-    }
-}
+                categoryMap.forEach((products, category) => {
+                    switch(sortBy) {
+                        case 'revenue':
+                            products.sort((a, b) => (b.totalRevenue || 0) - (a.totalRevenue || 0));
+                            break;
+                        case 'quantity':
+                            products.sort((a, b) => (b.totalQuantity || 0) - (a.totalQuantity || 0));
+                            break;
+                        case 'name':
+                            products.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+                            break;
+                        case 'revenue_quantity':
+                            products.sort((a, b) => {
+                                const revenueDiff = (b.totalRevenue || 0) - (a.totalRevenue || 0);
+                                if (revenueDiff !== 0) return revenueDiff;
+                                return (b.totalQuantity || 0) - (a.totalQuantity || 0);
+                            });
+                            break;
+                        default:
+                            products.sort((a, b) => (b.totalRevenue || 0) - (a.totalRevenue || 0));
+                    }
+                });
+
+                const csvLines = [];
+                const sortLabels = {
+                    'revenue': 'Revenue (High to Low)',
+                    'quantity': 'Quantity (High to Low)',
+                    'name': 'Product Name (A-Z)',
+                    'revenue_quantity': 'Revenue then Quantity'
+                };
+                const sortLabel = sortLabels[sortBy] || 'Revenue (High to Low)';
+                
+                csvLines.push(`"FULL PRODUCT SALES REPORT - ${storeName}"`);
+                csvLines.push(`"Period: ${fromDate} to ${toDate}"`);
+                csvLines.push(`"Generated: ${new Date().toLocaleString()}"`);
+                csvLines.push(`"Sorted by: ${sortLabel}"`);
+                csvLines.push(`"* FREE items (Buy X Free Y) are shown with 0 revenue"`);
+                csvLines.push("");
+                csvLines.push("Category,Product Name,Total Qty,Paid Qty,Free Qty,Revenue (RM)");
+
+                const sortedCategories = Array.from(categoryMap.keys()).sort();
+
+                let grandTotalQty = 0;
+                let grandTotalPaid = 0;
+                let grandTotalFree = 0;
+                let grandTotalRevenue = 0;
+
+                sortedCategories.forEach(category => {
+                    const products = categoryMap.get(category) || [];
+                    
+                    let catQty = 0, catPaid = 0, catFree = 0, catRevenue = 0;
+                    products.forEach(p => {
+                        catQty += (p.totalQuantity || 0);
+                        catPaid += (p.paidQuantity || 0);
+                        catFree += (p.freeQuantity || 0);
+                        catRevenue += (p.totalRevenue || 0);
+                    });
+
+                    csvLines.push(`"=== ${category.toUpperCase()} ===",,,,,`);
+                    csvLines.push(`"Category Total","",${catQty},${catPaid},${catFree},"RM ${catRevenue.toFixed(2)}"`);
+                    
+                    if (products.length === 0) {
+                        csvLines.push(`"NO PRODUCTS IN THIS CATEGORY",,0,0,0,RM 0.00"`);
+                    } else {
+                        products.forEach(p => {
+                            const name = p.name || 'Unknown Product';
+                            const qty = p.totalQuantity || 0;
+                            const paid = p.paidQuantity || 0;
+                            const free = p.freeQuantity || 0;
+                            const revenue = p.totalRevenue || 0;
+                            csvLines.push(`"${category}","${name}",${qty},${paid},${free},"RM ${revenue.toFixed(2)}"`);
+                            grandTotalQty += qty;
+                            grandTotalPaid += paid;
+                            grandTotalFree += free;
+                            grandTotalRevenue += revenue;
+                        });
+                    }
+                    csvLines.push("");
+                });
+
+                csvLines.push("");
+                csvLines.push(`"GRAND TOTAL","All Categories",${grandTotalQty},${grandTotalPaid},${grandTotalFree},"RM ${grandTotalRevenue.toFixed(2)}"`);
+
+                return csvLines.join("\n");
+            }
+
+            // ========== DOWNLOAD FULL PRODUCT LIST ==========
+            async function downloadFullProductList() {
+                if (!currentFrom || !currentTo) {
+                    showError("Please select a date range first");
+                    return;
+                }
+
+                const sortSelect = document.getElementById('sortProductListSelect');
+                const sortBy = sortSelect ? sortSelect.value : 'revenue';
+
+                const loadingDiv = document.createElement('div');
+                loadingDiv.className = 'loading-toast';
+                loadingDiv.innerText = 'Fetching product data...';
+                document.body.appendChild(loadingDiv);
+
+                try {
+                    const receipts = await fetchRawReceipts(currentStore, currentFrom, currentTo);
+                    
+                    if (!receipts || receipts.length === 0) {
+                        throw new Error('No receipts found for the selected period');
+                    }
+                    
+                    const breakdown = buildProductBreakdownFromReceipts(receipts, productCategoryMap);
+                    
+                    if (!breakdown.products || breakdown.products.length === 0) {
+                        throw new Error('No product data found');
+                    }
+
+                    const storeDisplayName = currentStore === 'all' ? 'ALL STORES' : currentStoreDisplay;
+                    const csvContent = generateFullProductListCSV(
+                        breakdown.products,
+                        currentFrom,
+                        currentTo,
+                        storeDisplayName,
+                        sortBy
+                    );
+
+                    if (!csvContent) {
+                        throw new Error('No data to export');
+                    }
+
+                    const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
+                    const link = document.createElement('a');
+                    const urlFile = URL.createObjectURL(blob);
+                    link.href = urlFile;
+                    link.setAttribute('download', `product_breakdown_${currentFrom}_to_${currentTo}.csv`);
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    URL.revokeObjectURL(urlFile);
+
+                    showError(`✅ Product breakdown downloaded! ${breakdown.products.length} products, Total: RM ${breakdown.totalSales.toFixed(2)} (${breakdown.freeItemCount} free items)`);
+                    setTimeout(() => document.getElementById('errorMsg').style.display = 'none', 3000);
+
+                } catch (err) {
+                    console.error('Download error:', err);
+                    showError('Failed to download: ' + err.message);
+                } finally {
+                    loadingDiv.remove();
+                }
+            }
+
             // Helper: get today's YYYY-MM-DD in local time
             function getTodayYMD() {
                 const d = new Date();
@@ -859,13 +943,12 @@ async function downloadFullProductList() {
             }
             
             async function fetchAllData(s,f,t,sig) {
-                const [sales, chart, products, employees] = await Promise.all([
+                const [sales, chart, employees] = await Promise.all([
                     fetchApi('getSalesReport', s, f, t, sig),
                     fetchApi('getSalesChartData', s, f, t, sig),
-                    fetchApi('getDiscountedProductSalesReport', s, f, t, sig),
                     fetchApi('getEmployeeSalesData', s, f, t, sig)
                 ]);
-                return { sales, chart, products, employees };
+                return { sales, chart, employees };
             }
             
             async function fetchAllEmployees() {
@@ -897,83 +980,150 @@ async function downloadFullProductList() {
                 });
             }
             
+            // ========== FIXED: UPDATE UI WITH ACCURATE PRODUCT BREAKDOWN ==========
             function updateUI(data) {
-    const { sales, chart, products, employees } = data;
-    lastChartResponseData = chart;
-    document.getElementById('totalSales').innerText = formatMYR(sales.totalSales);
-    document.getElementById('txnCount').innerText = formatNumber(sales.transactionCount);
-    document.getElementById('itemsSold').innerText = formatNumber(sales.totalItems);
-    const avg = sales.transactionCount ? sales.totalSales / sales.transactionCount : 0;
-    document.getElementById('avgTicket').innerText = formatMYR(avg);
-    document.getElementById('cashAmount').innerText = formatMYR(sales.cashTotal);
-    document.getElementById('cardAmount').innerText = formatMYR(sales.cardTotal);
-    document.getElementById('alipayAmount').innerText = formatMYR(sales.alipayTotal);
-    document.getElementById('otherAmount').innerText = formatMYR(sales.otherTotal);
-    const refundPos = (sales.refundTotal || 0) * -1;
-    document.getElementById('refundAmount').innerText = formatMYR(refundPos > 0 ? refundPos : 0);
-    
-    const staffDiv = document.getElementById('staffSalesList');
-    if (!employees.labels || !employees.labels.length) { staffDiv.innerHTML = '<div>No staff sales data</div>'; }
-    else {
-        let h = '<table class="mini-table"><thead><tr><th>Staff</th><th>Sales (RM)</th></tr></thead><tbody>';
-        for (let i = 0; i < employees.labels.length; i++) h += `<tr><td><strong>${escapeHtml(employees.labels[i])}</strong></td><td>${formatMYR(employees.data[i])}</td></tr>`;
-        h += '</tbody></table>';
-        staffDiv.innerHTML = h;
-    }
-    
-    // ========== REPLACED WITH FILTERED VERSION ==========
-    // --- CATEGORY SALES (NO REFUNDS) ---
-    const catDiv = document.getElementById('categorySalesList');
-    const validProducts = products.products ? products.products.filter(p => p.total >= 0 && p.quantity >= 0) : [];
+                const { sales, chart, employees } = data;
+                lastChartResponseData = chart;
+                document.getElementById('totalSales').innerText = formatMYR(sales.totalSales);
+                document.getElementById('txnCount').innerText = formatNumber(sales.transactionCount);
+                document.getElementById('itemsSold').innerText = formatNumber(sales.totalItems);
+                const avg = sales.transactionCount ? sales.totalSales / sales.transactionCount : 0;
+                document.getElementById('avgTicket').innerText = formatMYR(avg);
+                document.getElementById('cashAmount').innerText = formatMYR(sales.cashTotal);
+                document.getElementById('cardAmount').innerText = formatMYR(sales.cardTotal);
+                document.getElementById('alipayAmount').innerText = formatMYR(sales.alipayTotal);
+                document.getElementById('otherAmount').innerText = formatMYR(sales.otherTotal);
+                const refundPos = (sales.refundTotal || 0) * -1;
+                document.getElementById('refundAmount').innerText = formatMYR(refundPos > 0 ? refundPos : 0);
+                
+                const staffDiv = document.getElementById('staffSalesList');
+                if (!employees.labels || !employees.labels.length) { staffDiv.innerHTML = '<div>No staff sales data</div>'; }
+                else {
+                    let h = '<table class="mini-table"><thead><tr><th>Staff</th><th>Sales (RM)</th></tr></thead><tbody>';
+                    for (let i = 0; i < employees.labels.length; i++) h += `<tr><td><strong>${escapeHtml(employees.labels[i])}</strong></td><td>${formatMYR(employees.data[i])}</td></tr>`;
+                    h += '</tbody></table>';
+                    staffDiv.innerHTML = h;
+                }
+                
+                // --- BUILD PRODUCT BREAKDOWN FROM RAW RECEIPTS ---
+                const breakdown = buildProductBreakdownFromReceipts(rawReceiptsData, productCategoryMap);
+                const productSalesTotal = breakdown.totalSales;
+                const salesTotal = sales.totalSales || 0;
+                
+                // --- Show status messages ---
+                const warningDiv = document.getElementById('productTotalWarning');
+                const successDiv = document.getElementById('productTotalSuccess');
+                const diff = Math.abs(productSalesTotal - salesTotal);
+                
+                if (diff > 0.01) {
+                    warningDiv.style.display = 'block';
+                    warningDiv.innerHTML = `⚠️ <strong>Data Discrepancy:</strong> Product breakdown total (RM ${productSalesTotal.toFixed(2)}) doesn't match Total Sales (RM ${salesTotal.toFixed(2)}). Difference: RM ${diff.toFixed(2)}. Free items: ${breakdown.freeItemCount} (RM ${breakdown.totalFreeItemValue.toFixed(2)} value).`;
+                    warningDiv.className = 'missing-warning';
+                    successDiv.style.display = 'none';
+                } else {
+                    warningDiv.style.display = 'none';
+                    successDiv.style.display = 'block';
+                    successDiv.innerHTML = `✅ <strong>Perfect Match!</strong> Product breakdown (RM ${productSalesTotal.toFixed(2)}) matches Total Sales. ${breakdown.freeItemCount} free item(s) excluded from revenue.`;
+                }
+                
+                // --- CATEGORY SALES ---
+                const catDiv = document.getElementById('categorySalesList');
+                const products = breakdown.products || [];
+                
+                if (!products.length) { 
+                    catDiv.innerHTML = '<div>No category data</div>'; 
+                } else {
+                    const rev = new Map(), qty = new Map(), paidQty = new Map(), freeQty = new Map();
+                    
+                    products.forEach(p => {
+                        const category = p.category || 'Uncategorized';
+                        const revenue = p.totalRevenue || 0;
+                        const totalQ = p.totalQuantity || 0;
+                        const paidQ = p.paidQuantity || 0;
+                        const freeQ = p.freeQuantity || 0;
+                        
+                        if (revenue > 0 || totalQ > 0) {
+                            rev.set(category, (rev.get(category) || 0) + revenue);
+                            qty.set(category, (qty.get(category) || 0) + totalQ);
+                            paidQty.set(category, (paidQty.get(category) || 0) + paidQ);
+                            freeQty.set(category, (freeQty.get(category) || 0) + freeQ);
+                        }
+                    });
+                    
+                    const sorted = Array.from(rev.entries()).sort((a,b) => b[1] - a[1]);
+                    let h = '<table class="mini-table"><thead><tr><th>Category</th><th>Total Qty</th><th>Paid</th><th>Free</th><th>Revenue (RM)</th></tr></thead><tbody>';
+                    
+                    if (sorted.length === 0) {
+                        h += '<tr><td colspan="5" style="text-align:center;color:#888;">No sales data found</td></tr>';
+                    } else {
+                        sorted.forEach(([c, amt]) => { 
+                            h += `<tr><td><strong>${escapeHtml(c)}</strong></td><td>${formatNumber(qty.get(c))}</td><td>${formatNumber(paidQty.get(c))}</td><td>${formatNumber(freeQty.get(c))}</td><td>${formatMYR(amt)}</td></tr>`; 
+                        });
+                        const totalRev = Array.from(rev.values()).reduce((a,b) => a + b, 0);
+                        const totalQ = Array.from(qty.values()).reduce((a,b) => a + b, 0);
+                        const totalPaid = Array.from(paidQty.values()).reduce((a,b) => a + b, 0);
+                        const totalFree = Array.from(freeQty.values()).reduce((a,b) => a + b, 0);
+                        h += `<tr class="total-row"><td><strong>TOTAL</strong></td><td>${formatNumber(totalQ)}</td><td>${formatNumber(totalPaid)}</td><td>${formatNumber(totalFree)}</td><td>${formatMYR(totalRev)}</td></tr>`;
+                    }
+                    h += '</tbody></table>';
+                    catDiv.innerHTML = h;
+                }
 
-    if (!validProducts.length) { 
-        catDiv.innerHTML = '<div>No category data</div>'; 
-    } else {
-        const rev = new Map(), qty = new Map();
-        validProducts.forEach(p => { 
-            const c = p.category || 'Uncategorized'; 
-            rev.set(c, (rev.get(c) || 0) + (p.total > 0 ? p.total : 0)); 
-            qty.set(c, (qty.get(c) || 0) + (p.quantity > 0 ? p.quantity : 0)); 
-        });
-        const sorted = Array.from(rev.entries()).sort((a,b) => b[1] - a[1]);
-        let h = '<table class="mini-table"><thead><tr><th>Category</th><th>Quantity Sold</th><th>Total Sales (RM)</th></tr></thead><tbody>';
-        sorted.forEach(([c, amt]) => { 
-            h += `<tr><td><strong>${escapeHtml(c)}</strong></td><td>${formatNumber(qty.get(c))}</td><td>${formatMYR(amt)}</td></tr>`; 
-        });
-        h += '</tbody></table>';
-        catDiv.innerHTML = h;
-    }
-
-    // --- TOP PRODUCTS (NO REFUNDS) ---
-    const prodDiv = document.getElementById('productsList');
-    if (!validProducts.length) { 
-        prodDiv.innerHTML = '<div>No product sales</div>'; 
-    } else {
-        const allProducts = [...validProducts].sort((a,b) => (b.total || 0) - (a.total || 0));
-        let h = '<table class="mini-table"><thead><tr><th>Product</th><th>Qty Sold</th><th>Revenue (RM)</th></tr></thead><tbody>';
-        allProducts.forEach(p => { 
-            h += `<tr><td><strong>${escapeHtml(p.name || '')}</strong><br><span class="badge">${p.category || ''}</span></td><td>${formatNumber(p.quantity)}</td><td>${formatMYR(p.total)}</td></tr>`; 
-        });
-        h += '</tbody></table>';
-        prodDiv.innerHTML = h;
-    }
-    // ========== END OF REPLACED SECTION ==========
-    
-    renderChartWithData(chart);
-    hasData = true;
-}
+                // --- TOP PRODUCTS ---
+                const prodDiv = document.getElementById('productsList');
+                if (!products.length) { 
+                    prodDiv.innerHTML = '<div>No product sales</div>'; 
+                } else {
+                    const allProducts = [...products].sort((a,b) => (b.totalRevenue || 0) - (a.totalRevenue || 0));
+                    let h = '<table class="mini-table"><thead><tr><th>Product</th><th>Category</th><th>Qty</th><th>Paid</th><th>Free</th><th>Revenue (RM)</th></tr></thead><tbody>';
+                    let totalRev = 0, totalQ = 0, totalPaid = 0, totalFree = 0;
+                    allProducts.forEach(p => {
+                        const category = productCategoryMap[p.id] || p.category || 'Uncategorized';
+                        const revenue = p.totalRevenue || 0;
+                        const qty = p.totalQuantity || 0;
+                        const paid = p.paidQuantity || 0;
+                        const free = p.freeQuantity || 0;
+                        totalRev += revenue;
+                        totalQ += qty;
+                        totalPaid += paid;
+                        totalFree += free;
+                        
+                        const isBuyXFreeY = p.isBuyXFreeY || false;
+                        const freeBadge = free > 0 ? ` <span class="badge-free">🎁 ${free} free</span>` : '';
+                        const paidBadge = paid > 0 ? ` <span class="badge-paid">💰 ${paid} paid</span>` : '';
+                        
+                        h += `<tr>
+                            <td><strong>${escapeHtml(p.name || '')}</strong>${freeBadge}${paidBadge}</td>
+                            <td><span class="badge">${escapeHtml(category)}</span></td>
+                            <td>${formatNumber(qty)}</td>
+                            <td>${formatNumber(paid)}</td>
+                            <td>${formatNumber(free)}</td>
+                            <td>${revenue === 0 ? 'RM 0.00' : formatMYR(revenue)}</td>
+                        </tr>`;
+                    });
+                    h += `<tr class="total-row"><td><strong>TOTAL</strong></td><td></td><td>${formatNumber(totalQ)}</td><td>${formatNumber(totalPaid)}</td><td>${formatNumber(totalFree)}</td><td>${formatMYR(totalRev)}</td></tr>`;
+                    h += '</tbody></table>';
+                    prodDiv.innerHTML = h;
+                }
+                
+                renderChartWithData(chart);
+                hasData = true;
+            }
             
             async function refreshDashboard() {
                 if (refreshInProgress && currentAbortController) { currentAbortController.abort(); refreshBtn.classList.remove('refresh-spin'); refreshInProgress = false; }
                 if (!currentFrom || !currentTo) return;
-                if (hasData && currentFrom === lastLoadedFrom && currentTo === lastLoadedTo && currentStore === lastLoadedStore) { if (!initialPreloadDone) preloadCommonPresets(); return; }
+                
                 refreshInProgress = true;
                 refreshBtn.classList.add('refresh-spin');
                 errorDiv.style.display = 'none';
                 if (currentAbortController) currentAbortController.abort();
                 currentAbortController = new AbortController();
                 const signal = currentAbortController.signal;
+                
                 try {
+                    await fetchProductCategoryMap(currentStore);
+                    await fetchRawReceipts(currentStore, currentFrom, currentTo);
                     const data = await fetchAllData(currentStore, currentFrom, currentTo, signal);
                     updateUI(data);
                     lastLoadedFrom = currentFrom;
@@ -994,7 +1144,7 @@ async function downloadFullProductList() {
             function showError(msg) { errorDiv.innerText = msg; errorDiv.style.display = 'block'; setTimeout(() => errorDiv.style.display = 'none', 4000); }
             function escapeHtml(s) { if (!s) return ''; return s.replace(/[&<>]/g, m => m === '&' ? '&amp;' : m === '<' ? '&lt;' : '&gt;'); }
             
-            // ---------- CSV report generation (unchanged) ----------
+            // ---------- CSV report generation ----------
             function populateEmployeeDropdown() {
                 if (allEmployeesList.length === 0) {
                     reportEmployeeSelect.innerHTML = '<option value="all">👥 Loading employees...</option>';
@@ -1123,7 +1273,7 @@ async function downloadFullProductList() {
                 }
             }
             
-            // ---------- STANDARD RECEIPT PDF (NO DISCOUNT LINE) ----------
+            // ---------- STANDARD RECEIPT PDF ----------
             let currentReceiptStore = "queens";
             let currentReceiptStoreName = "Queensbay Mall";
             let currentReceiptPreset = "today";
@@ -1153,7 +1303,6 @@ async function downloadFullProductList() {
                 else document.getElementById('receiptCustomRange').style.display = 'block';
             }
             
-            // Standard PDF builder – NO discount calculation
             function buildStandardReceiptsHtml(receipts, storeName, fromDate, toDate, employeeFilter) {
                 return `<!DOCTYPE html>
                 <html>
@@ -1192,8 +1341,8 @@ async function downloadFullProductList() {
                         const isRefund = rec.total < 0 || rec.is_refund === true;
                         const receiptId = rec.transaction_id || rec.id || `TXN-${idx}`;
                         const dateTime = rec.timestamp
-  ? new Date(rec.timestamp).toISOString().replace('T', ' ').slice(0, 19)
-  : 'N/A';
+                          ? new Date(rec.timestamp).toISOString().replace('T', ' ').slice(0, 19)
+                          : 'N/A';
                         const employee = rec.sales_person_name || rec.employee_name || '—';
                         const totalAmount = Math.abs(rec.total || 0).toFixed(2);
                         const itemsList = rec.items && rec.items.length ? rec.items : (rec.item_name ? [{ item_name: rec.item_name, quantity: rec.quantity || 1, total: rec.total, price: rec.price }] : []);
@@ -1278,7 +1427,7 @@ async function downloadFullProductList() {
                 }
             }
             
-            // ---------- IRS RECEIPT PDF (WITH DISCOUNT ROW) ----------
+            // ---------- IRS RECEIPT PDF ----------
             let currentIrsStore = "queens";
             let currentIrsStoreName = "Queensbay Mall";
             let currentIrsPreset = "today";
@@ -1309,7 +1458,6 @@ async function downloadFullProductList() {
                 else document.getElementById('irsCustomRange').style.display = 'block';
             }
             
-            // IRS PDF builder – includes discount row when item subtotal > net total
             function buildIrsReceiptsHtml(receipts, storeName, fromDate, toDate, employeeFilter, grandTotal) {
                 return `<!DOCTYPE html>
                 <html>
@@ -1350,8 +1498,8 @@ async function downloadFullProductList() {
                         const isRefund = rec.total < 0;
                         const invoiceId = rec.invoice_no || rec.transaction_id || `IRS-${idx}`;
                         const dateTime = rec.timestamp
-  ? new Date(rec.timestamp).toISOString().replace('T', ' ').slice(0, 19)
-  : 'N/A';
+                          ? new Date(rec.timestamp).toISOString().replace('T', ' ').slice(0, 19)
+                          : 'N/A';
                         const employee = rec.employee_name || rec.sales_person_name || '—';
                         const netTotal = parseFloat(rec.total) || 0;
                         const totalAmount = Math.abs(netTotal).toFixed(2);
@@ -1407,75 +1555,71 @@ async function downloadFullProductList() {
             }
             
             async function generateIrsReceiptPDF() {
-    // Read custom date inputs if the custom range div is visible
-    const customDiv = document.getElementById('irsCustomRange');
-    if (customDiv && customDiv.style.display === 'block') {
-        const fromInput = document.getElementById('irsFromDate').value;
-        const toInput = document.getElementById('irsToDate').value;
-        if (fromInput && toInput) {
-            irsFromDate = fromInput;
-            irsToDate = toInput;
-            currentIrsPreset = 'custom';
-        }
-    }
-    if (!irsFromDate || !irsToDate) {
-        showError("Please select a valid date range");
-        return;
-    }
-    const selectedStore = currentIrsStore;
-    const selectedEmployeeId = irsEmployeeSelect.value;
-    let selectedEmployeeName = null;
-    if (selectedEmployeeId !== 'all') {
-        const emp = allEmployeesList.find(e => e.id == selectedEmployeeId);
-        selectedEmployeeName = emp ? emp.name : null;
-    }
-    const loadingDiv = document.createElement('div');
-    loadingDiv.className = 'loading-toast';
-    loadingDiv.innerText = `Fetching IRS receipts ${irsFromDate} → ${irsToDate} ...`;
-    document.body.appendChild(loadingDiv);
-    try {
-        // Use standard getReceipts endpoint – it's guaranteed to exist
-        let url = `${POS_BACKEND_URL}?action=getIrsReceipts&store=${selectedStore}&from=${irsFromDate}&to=${irsToDate}&employeeId=${selectedEmployeeId || 'all'}`;
-        const response = await fetch(url);
-        const result = await response.json();
-        if (!result.success || !result.receipts) throw new Error("No receipt data from server");
+                const customDiv = document.getElementById('irsCustomRange');
+                if (customDiv && customDiv.style.display === 'block') {
+                    const fromInput = document.getElementById('irsFromDate').value;
+                    const toInput = document.getElementById('irsToDate').value;
+                    if (fromInput && toInput) {
+                        irsFromDate = fromInput;
+                        irsToDate = toInput;
+                        currentIrsPreset = 'custom';
+                    }
+                }
+                if (!irsFromDate || !irsToDate) {
+                    showError("Please select a valid date range");
+                    return;
+                }
+                const selectedStore = currentIrsStore;
+                const selectedEmployeeId = irsEmployeeSelect.value;
+                let selectedEmployeeName = null;
+                if (selectedEmployeeId !== 'all') {
+                    const emp = allEmployeesList.find(e => e.id == selectedEmployeeId);
+                    selectedEmployeeName = emp ? emp.name : null;
+                }
+                const loadingDiv = document.createElement('div');
+                loadingDiv.className = 'loading-toast';
+                loadingDiv.innerText = `Fetching IRS receipts ${irsFromDate} → ${irsToDate} ...`;
+                document.body.appendChild(loadingDiv);
+                try {
+                    let url = `${POS_BACKEND_URL}?action=getIrsReceipts&store=${selectedStore}&from=${irsFromDate}&to=${irsToDate}&employeeId=${selectedEmployeeId || 'all'}`;
+                    const response = await fetch(url);
+                    const result = await response.json();
+                    if (!result.success || !result.receipts) throw new Error("No receipt data from server");
 
-        let allReceipts = result.receipts;
-        
-        let irsReceipts = result.receipts;
-        
-        if (selectedEmployeeName) {
-            irsReceipts = irsReceipts.filter(r => 
-                (r.sales_person_name === selectedEmployeeName || r.employee_name === selectedEmployeeName)
-            );
-        }
-        
-        if (irsReceipts.length === 0) {
-            throw new Error("No Card/Alipay receipts found for the selected criteria.");
-        }
-        
-        irsReceipts.sort((a,b) => (a.timestamp || '').localeCompare(b.timestamp || ''));
-        
-        const grandTotal = irsReceipts.reduce((sum, rec) => sum + (parseFloat(rec.total) || 0), 0);
-        const storeDisplayName = selectedStore === 'all' ? 'ALL STORES' : currentIrsStoreName;
-        
-        const htmlContent = buildIrsReceiptsHtml(irsReceipts, storeDisplayName, irsFromDate, irsToDate, selectedEmployeeName, grandTotal);
-        const printWindow = window.open('', '_blank');
-        if (!printWindow) {
-            throw new Error("Popup blocked. Please allow popups for this site.");
-        }
-        printWindow.document.write(htmlContent);
-        printWindow.document.close();
-        printWindow.focus();
-        printWindow.print();
-        
-    } catch(err) {
-        console.error(err);
-        showError("IRS PDF failed: " + err.message);
-    } finally {
-        loadingDiv.remove();
-    }
-}
+                    let irsReceipts = result.receipts;
+                    
+                    if (selectedEmployeeName) {
+                        irsReceipts = irsReceipts.filter(r => 
+                            (r.sales_person_name === selectedEmployeeName || r.employee_name === selectedEmployeeName)
+                        );
+                    }
+                    
+                    if (irsReceipts.length === 0) {
+                        throw new Error("No Card/Alipay receipts found for the selected criteria.");
+                    }
+                    
+                    irsReceipts.sort((a,b) => (a.timestamp || '').localeCompare(b.timestamp || ''));
+                    
+                    const grandTotal = irsReceipts.reduce((sum, rec) => sum + (parseFloat(rec.total) || 0), 0);
+                    const storeDisplayName = selectedStore === 'all' ? 'ALL STORES' : currentIrsStoreName;
+                    
+                    const htmlContent = buildIrsReceiptsHtml(irsReceipts, storeDisplayName, irsFromDate, irsToDate, selectedEmployeeName, grandTotal);
+                    const printWindow = window.open('', '_blank');
+                    if (!printWindow) {
+                        throw new Error("Popup blocked. Please allow popups for this site.");
+                    }
+                    printWindow.document.write(htmlContent);
+                    printWindow.document.close();
+                    printWindow.focus();
+                    printWindow.print();
+                    
+                } catch(err) {
+                    console.error(err);
+                    showError("IRS PDF failed: " + err.message);
+                } finally {
+                    loadingDiv.remove();
+                }
+            }
             
             // ----- Event Listeners for Receipts -----
             function openReceiptChoiceModal() { receiptChoiceModal.classList.add('active'); }
@@ -1550,18 +1694,30 @@ async function downloadFullProductList() {
             generateReportBtn.addEventListener('click', generateCSVReport);
             document.querySelectorAll('[data-report-preset]').forEach(btn => { btn.addEventListener('click', () => { const preset = btn.getAttribute('data-report-preset'); setReportPreset(preset); }); });
             reportModal.addEventListener('click', (e) => { if (e.target === reportModal) closeReportDownloadModal(); });
+            
             // ========== FULL PRODUCT LIST DOWNLOAD ==========
-const downloadFullProductListBtn = document.getElementById('downloadFullProductListBtn');
-if (downloadFullProductListBtn) {
-    downloadFullProductListBtn.addEventListener('click', downloadFullProductList);
-}
+            const downloadFullProductListBtn = document.getElementById('downloadFullProductListBtn');
+            if (downloadFullProductListBtn) {
+                downloadFullProductListBtn.addEventListener('click', downloadFullProductList);
+            }
+            
             const storeModal = document.getElementById('storeModal');
             const dateModal = document.getElementById('dateModal');
             function openStoreModal() { storeModal.classList.add('active'); }
             function closeStoreModal() { storeModal.classList.remove('active'); }
             function openDateModal() { document.getElementById('customDateRange').style.display = 'none'; dateModal.classList.add('active'); }
             function closeDateModal() { dateModal.classList.remove('active'); }
-            function selectStore(storeKey, name) { currentStore = storeKey; currentStoreDisplay = name; storeNameSpan.innerText = name; closeStoreModal(); hasData = false; lastLoadedStore = ""; refreshDashboard(); }
+            function selectStore(storeKey, name) { 
+                currentStore = storeKey; 
+                currentStoreDisplay = name; 
+                storeNameSpan.innerText = name; 
+                closeStoreModal(); 
+                hasData = false; 
+                lastLoadedStore = ""; 
+                cache.clear();
+                rawReceiptsData = [];
+                refreshDashboard(); 
+            }
             function selectDatePreset(p) { if (p === 'custom') { document.getElementById('customDateRange').style.display = 'block'; return; } applyPreset(p); closeDateModal(); }
             function applyCustomRange() { const from = document.getElementById('customFromDate').value, to = document.getElementById('customToDate').value; if (!from || !to) { showError("Select both dates"); return; } if (from > to) { showError("Invalid range"); return; } if (isFutureDate(from)) { showError("Cannot select future start date."); return; } applyPreset('custom', from, to); closeDateModal(); }
             
@@ -1580,6 +1736,7 @@ if (downloadFullProductListBtn) {
             
             document.querySelectorAll('.toggle-btn').forEach(btn => btn.addEventListener('click', () => { document.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active')); btn.classList.add('active'); currentChartType = btn.getAttribute('data-chart-type'); if (lastChartResponseData) renderChartWithData(lastChartResponseData); else if (trendChart && trendChart.data) renderChartWithData({ salesByDay: { labels: trendChart.data.labels, data: trendChart.data.datasets[0].data } }); }));
             
+            // ---- Initial Load ----
             fetchAllEmployees();
             const todayNow = new Date();
             currentPresetType = 'day';
@@ -1588,7 +1745,10 @@ if (downloadFullProductListBtn) {
             currentTo = currentFrom;
             updateDateLabel();
             storeNameSpan.innerText = "Queensbay Mall";
-            refreshDashboard();
+            
+            fetchProductCategoryMap(currentStore).then(() => {
+                refreshDashboard();
+            });
         });
     })();
 </script>
